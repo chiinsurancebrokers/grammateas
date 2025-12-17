@@ -2,6 +2,6 @@ streamlit
 pandas
 plotly
 reportlab
-anthropic
-python-dotenv
-apscheduler
+xlrd
+openpyxl
+xlsxwriter
