@@ -76,8 +76,10 @@ st.markdown("""
 # =============================================================================
 
 def get_db_connection():
-    """Σύνδεση με τη βάση δεδομένων"""
-    return sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
 
 
 def get_all_members():
@@ -85,15 +87,24 @@ def get_all_members():
     conn = get_db_connection()
     query = """
         SELECT 
-            member_id, last_name, first_name, profession,
-            mobile_phone, email, current_degree, member_status,
-            entry_date, last_payment_date, city
+            id AS member_id,
+            lastname,
+            firstname,
+            profession,
+            mobile,
+            email,
+            current_degree,
+            member_status,
+            created_at AS entry_date,
+            updated_at AS last_payment_date,
+            city
         FROM members
-        ORDER BY last_name, first_name
+        ORDER BY lastname, firstname
     """
     df = pd.read_sql_query(query, conn)
     conn.close()
     return df
+
 
 def get_member_details(member_id):
     """Λήψη πλήρων στοιχείων μέλους"""
@@ -105,7 +116,8 @@ def get_member_details(member_id):
     conn.close()
     
     if row:
-        return dict(zip(columns, row))
+    return dict(row)
+
     return None
 
 def update_member(member_id, data):
