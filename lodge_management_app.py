@@ -75,9 +75,10 @@ st.markdown("""
 # DATABASE FUNCTIONS
 # =============================================================================
 
-def get_db_connection(db_path='lodge_members.db'):
+def get_db_connection():
     """Σύνδεση με τη βάση δεδομένων"""
-    return sqlite3.connect(db_path)
+    return sqlite3.connect(DB_PATH, check_same_thread=False)
+
 
 def get_all_members():
     """Λήψη όλων των μελών"""
