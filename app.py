@@ -7,6 +7,8 @@ Author: Χρήστος Ιατρόπουλος
 """
 
 import streamlit as st
+
+from modules.database import get_database
 from modules.config import get_config
 
 # Page configuration
@@ -114,7 +116,7 @@ with st.sidebar:
     st.markdown("---")
     
     # Quick info
-    from modules.database import get_database
+    
     db = get_database()
     stats = db.get_member_statistics()
     
