@@ -1,13 +1,24 @@
 import streamlit as st
+from pathlib import Path
 import sys
-sys.path.append('..')
+
+# Path-safe import για modules/
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
 from modules.database import get_database
 from modules.pdf_generator import create_member_card_pdf
 import zipfile
 from datetime import datetime
 import io
 
-st.set_page_config(page_title="Καρτέλες PDF", page_icon="📄", layout="wide")
+st.set_page_config(
+    page_title="Καρτέλες PDF",
+    page_icon="📄",
+    layout="wide"
+)
+
+db = get_database()
+
 
 st.markdown("""
 <style>
@@ -15,7 +26,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-db = get_database()
 
 st.markdown('<div class="main-header">📄 Καρτέλες PDF</div>', unsafe_allow_html=True)
 
