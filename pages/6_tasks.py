@@ -1,10 +1,21 @@
 import streamlit as st
+from pathlib import Path
 import sys
-sys.path.append('..')
+
+# Path-safe import για modules/
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
 from modules.database import get_database
 from datetime import datetime, timedelta
 
-st.set_page_config(page_title="Εργασίες", page_icon="📋", layout="wide")
+st.set_page_config(
+    page_title="Εργασίες",
+    page_icon="📋",
+    layout="wide"
+)
+
+db = get_database()
+
 
 st.markdown("""
 <style>
@@ -12,8 +23,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-db = get_database()
-
+ 
 st.markdown('<div class="main-header">📋 Εργασίες & Υπενθυμίσεις</div>', unsafe_allow_html=True)
 
 tab1, tab2, tab3 = st.tabs(["📝 Όλες οι Εργασίες", "➕ Νέα Εργασία", "⚠️ Προσεχείς & Καθυστερημένες"])
