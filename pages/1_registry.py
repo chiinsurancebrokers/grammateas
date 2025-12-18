@@ -3,15 +3,20 @@
 Προβολή, αναζήτηση και φιλτράρισμα μελών
 """
 
+import streamlit as st
+
 from pathlib import Path
 import sys
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-
 from modules.database import get_database
 from modules.config import get_config
 
-st.set_page_config(page_title="Μητρώο Μελών", page_icon="📋", layout="wide")
+st.set_page_config(
+    page_title="Μητρώο Μελών",
+    page_icon="📋",
+    layout="wide"
+)
 
 # CSS
 st.markdown("""
