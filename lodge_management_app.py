@@ -5,7 +5,7 @@
 Δημιουργήθηκε για τη Στοά ΑΚΡΟΠΟΛΙΣ
 Γραμματεύς-Σφραγιδοφύλαξ: Χρήστος Ιατρόπουλος
 """
-import os
+
 import streamlit as st
 import sqlite3
 import pandas as pd
@@ -20,10 +20,6 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "lodge_members.db")
-
 
 # Register Greek-supporting fonts
 try:
@@ -75,36 +71,24 @@ st.markdown("""
 # DATABASE FUNCTIONS
 # =============================================================================
 
-def get_db_connection():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
+def get_db_connection(db_path='lodge_members.db'):
+    """Σύνδεση με τη βάση δεδομένων"""
+    return sqlite3.connect(db_path)
 
 def get_all_members():
     """Λήψη όλων των μελών"""
     conn = get_db_connection()
     query = """
         SELECT 
-            id AS member_id,
-            lastname,
-            firstname,
-            profession,
-            mobile,
-            email,
-            current_degree,
-            member_status,
-            created_at AS entry_date,
-            updated_at AS last_payment_date,
-            city
+            member_id, last_name, first_name, profession,
+            mobile_phone, email, current_degree, member_status,
+            entry_date, last_payment_date, city
         FROM members
-        ORDER BY lastname, firstname
+        ORDER BY last_name, first_name
     """
     df = pd.read_sql_query(query, conn)
     conn.close()
     return df
-
 
 def get_member_details(member_id):
     """Λήψη πλήρων στοιχείων μέλους"""
@@ -116,8 +100,7 @@ def get_member_details(member_id):
     conn.close()
     
     if row:
-    return dict(row)
-
+        return dict(zip(columns, row))
     return None
 
 def update_member(member_id, data):
