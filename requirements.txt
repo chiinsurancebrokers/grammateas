@@ -1,7 +1,0 @@
-streamlit
-pandas
-plotly
-reportlab
-xlrd
-openpyxl
-xlsxwriter
