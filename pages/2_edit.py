@@ -1,9 +1,17 @@
 import streamlit as st
+from pathlib import Path
 import sys
-sys.path.append('..')
-from modules.database import get_database
 
-st.set_page_config(page_title="Επεξεργασία Μέλους", page_icon="👤", layout="wide")
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from modules.database import get_database
+# from modules.config import get_config  # αν το χρειάζεσαι
+
+st.set_page_config(
+    page_title="Επεξεργασία Μέλους",
+    page_icon="👤",
+    layout="wide"
+)
 
 st.markdown("""
 <style>
