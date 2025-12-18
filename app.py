@@ -1,22 +1,9 @@
-"""
-Σύστημα Διαχείρισης Στοάς ΑΚΡΟΠΟΛΙΣ
-Multi-Page Application - Main Entry Point
-
-Version: 2.0
-Author: Χρήστος Ιατρόπουλος
-"""
-
 import streamlit as st
 from modules.database import get_database
 from modules.config import get_config
 
-# Page configuration
-st.set_page_config(
-    page_title="Στοά ΑΚΡΟΠΟΛΙΣ",
-    page_icon="🏛️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Στοά ΑΚΡΟΠΟΛΙΣ", page_icon="🏛️", layout="wide")
+
 
 # Custom CSS
 st.markdown("""
