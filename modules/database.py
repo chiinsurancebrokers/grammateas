@@ -15,6 +15,7 @@ class Database:
     def __init__(self, db_path: str = "lodge_members.db"):
         self.db_path = db_path
         self._init_tables()
+        self._ensure_member_columns()  # ✅ προσθήκη
 
     def _init_tables(self):
         """Δημιουργία πινάκων αν δεν υπάρχουν"""
@@ -38,6 +39,60 @@ class Database:
 
         conn.commit()
         conn.close()
+
+    def _ensure_member_columns(self):
+        """
+        Προσθέτει columns στο members αν λείπουν.
+        Ασφαλές: αν υπάρχει ήδη column, το αγνοεί.
+        """
+        conn = self.get_connection()
+        cur = conn.cursor()
+
+        def add_col(name: str, coltype: str = "TEXT"):
+            try:
+                cur.execute(f"ALTER TABLE members ADD COLUMN {name} {coltype}")
+            except Exception:
+                pass
+
+        # ✅ Μόνο 2 αριθμοί μητρώου
+        add_col("lodge_reg_no")
+        add_col("grand_lodge_reg_no")
+
+        # ✅ Τεκτονικές πληροφορίες / βαθμοί
+        add_col("initiation_diploma")
+        add_col("second_degree_date")
+        add_col("second_degree_diploma")
+        add_col("third_degree_date")
+        add_col("third_degree_diploma")
+        add_col("initiation_lodge_number")
+        add_col("sponsor")
+
+        # ✅ Ιστορικό στοάς
+        add_col("entry_date")
+        add_col("offices_held")
+        add_col("honors")
+        add_col("committees")
+
+        # ✅ Οικογενειακά
+        add_col("marital_status")
+        add_col("spouse_name")
+        add_col("children_names")
+        add_col("emergency_phone")
+        add_col("emergency_contact")
+
+        # ✅ Διοικητικά
+        add_col("status_change_date")
+        add_col("status_change_reason")
+        add_col("last_payment_date")
+        add_col("notes")
+
+        # ✅ Συμβατότητα για ΑΦΜ (PDF χρησιμοποιεί tax_id)
+        add_col("tax_id")
+        add_col("afm")
+
+        conn.commit()
+        conn.close()
+
 
     def get_connection(self):
         """Get database connection"""
