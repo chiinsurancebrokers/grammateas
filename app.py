@@ -214,20 +214,17 @@ st.subheader("⚡ Γρήγορες Ενέργειες")
 c1, c2, c3, c4 = st.columns(4)
 
 with c1:
-    if st.button("📋 Προβολή Μητρώου"):
-        st.switch_page("📋 Μητρώο")
+    st.page_link("pages/1_Μητρώο.py", label="📋 Προβολή Μητρώου", use_container_width=True)
 
 with c2:
-    if st.button("✏️ Μαζική Επεξεργασία"):
-        st.switch_page("✏️ Μαζική Επεξεργασία")
+    st.page_link("pages/3_Μαζική_Επεξεργασία.py", label="✏️ Μαζική Επεξεργασία", use_container_width=True)
 
 with c3:
-    if st.button("📄 Δημιουργία Καρτελών"):
-        st.switch_page("📄 Καρτέλες")
+    st.page_link("pages/4_Καρτέλες.py", label="📄 Δημιουργία Καρτελών", use_container_width=True)
 
 with c4:
-    if st.button("📊 Στατιστικά"):
-        st.switch_page("📈 Στατιστικά")
+    st.page_link("pages/5_Στατιστικά.py", label="📊 Στατιστικά", use_container_width=True)
+
 
 
 
