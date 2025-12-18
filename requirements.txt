@@ -1,0 +1,9 @@
+streamlit
+pandas
+plotly
+reportlab
+xlrd
+openpyxl
+xlsxwriter
+anthropic
+python-dotenv
