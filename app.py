@@ -7,7 +7,6 @@ Author: Χρήστος Ιατρόπουλος
 """
 
 import streamlit as st
-
 from modules.database import get_database
 from modules.config import get_config
 
