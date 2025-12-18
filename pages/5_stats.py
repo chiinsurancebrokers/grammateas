@@ -1,12 +1,23 @@
 import streamlit as st
+from pathlib import Path
 import sys
-sys.path.append('..')
+
+# Path-safe import για modules/
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
 from modules.database import get_database
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 
-st.set_page_config(page_title="Στατιστικά", page_icon="📈", layout="wide")
+st.set_page_config(
+    page_title="Στατιστικά",
+    page_icon="📈",
+    layout="wide"
+)
+
+db = get_database()
+
 
 st.markdown("""
 <style>
@@ -15,7 +26,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-db = get_database()
 
 st.markdown('<div class="main-header">📈 Στατιστικά & Αναλύσεις</div>', unsafe_allow_html=True)
 
