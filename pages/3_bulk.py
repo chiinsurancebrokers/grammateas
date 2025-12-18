@@ -1,12 +1,21 @@
 import streamlit as st
+from pathlib import Path
 import sys
-sys.path.append('..')
+
+# Path-safe import για modules/
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
 from modules.database import get_database
 import pandas as pd
 import io
 from datetime import datetime
 
-st.set_page_config(page_title="Μαζική Επεξεργασία", page_icon="✏️", layout="wide")
+st.set_page_config(
+    page_title="Μαζική Επεξεργασία",
+    page_icon="✏️",
+    layout="wide"
+)
+
 
 st.markdown("""
 <style>
