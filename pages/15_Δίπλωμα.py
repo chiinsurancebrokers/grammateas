@@ -98,6 +98,20 @@ with col_left:
     watermark = st.checkbox("Ένδειξη 'ΑΝΤΙΓΡΑΦΟ ΑΡΧΕΙΟΥ'", value=True)
 
     st.markdown("---")
+    st.subheader("✍️ Υπογράφοντες")
+    c1, c2 = st.columns(2)
+    with c1:
+        sig1_title = st.text_input("Τίτλος 1ου υπογράφοντος",
+                                    value="ο Μέγας Διδάσκαλος")
+        sig1_name  = st.text_input("Όνομα 1ου υπογράφοντος",
+                                    value="Γεώργιος Μπινιάρης")
+    with c2:
+        sig2_title = st.text_input("Τίτλος 2ου υπογράφοντος",
+                                    value="ο Μέγας Γραμματεύς")
+        sig2_name  = st.text_input("Όνομα 2ου υπογράφοντος",
+                                    value="Ανδρέας Αρχουζής")
+
+    st.markdown("---")
     st.subheader("✏️ Κείμενο Διπλώματος")
     st.caption("Επεξεργαστείτε ελεύθερα. Χρησιμοποιήστε τα markers --- για δομή.")
 
@@ -176,8 +190,8 @@ with col_right:
     preview_html += f'<hr style="border-color:#b8960c;margin-top:12px;">'
     preview_html += f'<p style="font-style:italic;color:#1a2a4a;">Ἐν Ἀνατολῇ Ἀθηνῶν τῇ {ημ_str[:ημ_str.find(" τοῦ")] if " τοῦ" in ημ_str else ημ_str}</p>'
     preview_html += '<div style="display:flex;justify-content:space-between;margin-top:20px;padding:0 20px;">'
-    preview_html += '<div style="text-align:center;width:40%;"><div style="border-top:1px solid #333;padding-top:4px;font-size:11px;">ο Μέγας Διδάσκαλος<br/>Γεώργιος Μπινιάρης</div></div>'
-    preview_html += '<div style="text-align:center;width:40%;"><div style="border-top:1px solid #333;padding-top:4px;font-size:11px;">ο Μέγας Γραμματεύς<br/>Ανδρέας Αρχουζής</div></div>'
+    preview_html += f'<div style="text-align:center;width:40%;"><div style="border-top:1px solid #333;padding-top:4px;font-size:11px;">{sig1_title}<br/>{sig1_name}</div></div>'
+    preview_html += f'<div style="text-align:center;width:40%;"><div style="border-top:1px solid #333;padding-top:4px;font-size:11px;">{sig2_title}<br/>{sig2_name}</div></div>'
     preview_html += '</div></div>'
 
     st.markdown(preview_html, unsafe_allow_html=True)
@@ -190,7 +204,11 @@ with col_right:
             member=m,
             text=diploma_text,
             ημ_βαθμού=str(ημ),
-            watermark=watermark
+            watermark=watermark,
+            sig1_title=sig1_title,
+            sig1_name=sig1_name,
+            sig2_title=sig2_title,
+            sig2_name=sig2_name,
         )
         ep = m.get('επώνυμο','').replace(' ','_')
         on = m.get('όνομα','').replace(' ','_')

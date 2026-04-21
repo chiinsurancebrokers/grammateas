@@ -652,7 +652,11 @@ def generate_diploma_pdf(member: Dict, βαθμός: str, ημ_βαθμού: str
 # ═══════════════════════════════════════════════════════════════
 
 def generate_diploma_custom_pdf(member: Dict, text: str,
-                                 ημ_βαθμού: str, watermark: bool = True) -> io.BytesIO:
+                                 ημ_βαθμού: str, watermark: bool = True,
+                                 sig1_title: str = "ο Μέγας Διδάσκαλος",
+                                 sig1_name:  str = "Γεώργιος Μπινιάρης",
+                                 sig2_title: str = "ο Μέγας Γραμματεύς",
+                                 sig2_name:  str = "Ανδρέας Αρχουζής") -> io.BytesIO:
     """
     Δίπλωμα με ελεύθερα επεξεργάσιμο κείμενο.
     Markers στο κείμενο:
@@ -775,9 +779,9 @@ def generate_diploma_custom_pdf(member: Dict, text: str,
     # Υπογραφές
     story.append(Spacer(1, .2*cm))
     sig_data = [[
-        Paragraph("ο Μέγας Διδάσκαλος<br/><br/><br/><br/>Γεώργιος Μπινιάρης", s["dip_sig"]),
+        Paragraph(f"{sig1_title}<br/><br/><br/><br/>{sig1_name}", s["dip_sig"]),
         Paragraph("", s["dip_sig"]),
-        Paragraph("ο Μέγας Γραμματεύς<br/><br/><br/><br/>Ανδρέας Αρχουζής",   s["dip_sig"]),
+        Paragraph(f"{sig2_title}<br/><br/><br/><br/>{sig2_name}", s["dip_sig"]),
     ]]
     sig_t = Table(sig_data, colWidths=[5.5*cm, 3*cm, 5.5*cm])
     sig_t.setStyle(TableStyle([
