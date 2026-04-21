@@ -645,3 +645,158 @@ def generate_diploma_pdf(member: Dict, βαθμός: str, ημ_βαθμού: str
     doc.build(story)
     buf.seek(0)
     return buf
+
+
+# ═══════════════════════════════════════════════════════════════
+# 7. ΔΙΠΛΩΜΑ ΜΕ ΕΠΕΞΕΡΓΑΣΙΜΟ ΚΕΙΜΕΝΟ
+# ═══════════════════════════════════════════════════════════════
+
+def generate_diploma_custom_pdf(member: Dict, text: str,
+                                 ημ_βαθμού: str, watermark: bool = True) -> io.BytesIO:
+    """
+    Δίπλωμα με ελεύθερα επεξεργάσιμο κείμενο.
+    Markers στο κείμενο:
+      --- ΤΙΤΛΟΣ ΒΑΘΜΟΥ ---  → επόμενη γραμμή = τίτλος βαθμού (bold 26pt)
+      --- ΣΥΝΕΧΕΙΑ ---        → συνέχεια italic κειμένου
+    """
+    s = _styles()
+    GOLD_D = colors.HexColor("#8B6914")
+
+    ονομα  = f"{member.get('επώνυμο','')} {member.get('όνομα','')}".strip()
+    ημ_str = _fmt_date(ημ_βαθμού)
+    try:
+        import pandas as pd
+        d = pd.to_datetime(ημ_βαθμού)
+        ημ_short = f"{d.day}η {ΜΗΝΕΣ[d.month]} {d.year}"
+    except Exception:
+        ημ_short = ημ_βαθμού
+
+    buf = io.BytesIO()
+
+    def draw_border(c, doc):
+        w, h = A4
+        mg = 1.2*cm
+        c.setStrokeColor(GOLD_D)
+        c.setLineWidth(3)
+        c.rect(mg, mg, w - 2*mg, h - 2*mg)
+        c.setLineWidth(1)
+        inn = mg + 0.35*cm
+        c.rect(inn, inn, w - 2*inn, h - 2*inn)
+        # Μαίανδρος
+        c.setFillColor(GOLD_D)
+        c.setLineWidth(0)
+        sq, gap = 0.27*cm, 0.31*cm
+        bm = mg + 0.04*cm
+        x = bm + sq
+        while x < w - bm - sq * 2:
+            c.rect(x, h - bm - sq, sq, sq, fill=1, stroke=0)
+            c.rect(x, bm, sq, sq, fill=1, stroke=0)
+            x += gap + sq
+        y = bm + sq
+        while y < h - bm - sq * 2:
+            c.rect(bm, y, sq, sq, fill=1, stroke=0)
+            c.rect(w - bm - sq, y, sq, sq, fill=1, stroke=0)
+            y += gap + sq
+        # Watermark
+        if watermark:
+            c.saveState()
+            c.setFillColor(colors.Color(0.75, 0.75, 0.75, alpha=0.2))
+            c.setFont("DSB", 32)
+            c.translate(w / 2, h / 2)
+            c.rotate(38)
+            c.drawCentredString(0, 0, "ΑΝΤΙΓΡΑΦΟ ΑΡΧΕΙΟΥ ΣΤΟΑΣ")
+            c.restoreState()
+        # Κυκλικό έμβλημα
+        c.setStrokeColor(GOLD_D)
+        c.setFillColor(colors.white)
+        c.setLineWidth(1.5)
+        c.circle(w / 2, h - 3.0*cm, 0.85*cm, fill=1, stroke=1)
+        c.setFillColor(NAVY)
+        c.setFont("DSB", 5.5)
+        c.drawCentredString(w / 2, h - 2.97*cm, "Μ.Σ.Τ.Ε.")
+
+    frame = Frame(2.2*cm, 2.2*cm, A4[0] - 4.4*cm, A4[1] - 4.4*cm,
+                  leftPadding=.5*cm, rightPadding=.5*cm,
+                  topPadding=.3*cm, bottomPadding=.3*cm)
+    tmpl  = PageTemplate(id="diploma_custom", frames=[frame], onPage=draw_border)
+    doc   = BaseDocTemplate(buf, pagesize=A4,
+                            rightMargin=2.2*cm, leftMargin=2.2*cm,
+                            topMargin=2.2*cm, bottomMargin=2.2*cm)
+    doc.addPageTemplates([tmpl])
+
+    story = []
+    story.append(Spacer(1, 0.7*cm))
+
+    # Κεφαλίδα
+    story.append(Paragraph("Ε.Λ.Τ.Μ.Α.Τ.Σ.", s["dip_hdr2"]))
+    story.append(Spacer(1, .4*cm))
+    story.append(HRFlowable(width="80%", thickness=1.5, color=GOLD_D, hAlign="CENTER", spaceAfter=6))
+    story.append(Paragraph("ΜΕΓΑΛΗ ΣΤΟΑ ΤΗΣ ΕΛΛΑΔΟΣ", s["dip_hdr1"]))
+    story.append(Paragraph("Ἀρχαίου Ἐλευθέρου καὶ Ἀποδεδεγμένου Τεκτονισμοῦ", s["dip_hdr2"]))
+    story.append(HRFlowable(width="80%", thickness=1.5, color=GOLD_D, hAlign="CENTER", spaceAfter=10))
+    story.append(Spacer(1, .3*cm))
+
+    # ── Parse του ελεύθερου κειμένου ──────────────────────────
+    lines = text.split("\n")
+    title_next = False
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Markers
+        if stripped == "--- ΤΙΤΛΟΣ ΒΑΘΜΟΥ ---":
+            title_next = True
+            continue
+        elif stripped == "--- ΣΥΝΕΧΕΙΑ ---":
+            title_next = False
+            continue
+        elif not stripped:
+            story.append(Spacer(1, .15*cm))
+            continue
+
+        # Τίτλος βαθμού (από marker)
+        if title_next:
+            story.append(Paragraph(stripped, s["dip_deg"]))
+            title_next = False
+            continue
+
+        # Όνομα μέλους → bold μεγάλο
+        if stripped == ονομα:
+            story.append(Paragraph(stripped, s["dip_name"]))
+            continue
+
+        # Κανονικές γραμμές → italic
+        story.append(Paragraph(stripped, s["dip_body"]))
+
+    # Ημερομηνία
+    story.append(Spacer(1, .35*cm))
+    story.append(Paragraph(f"Ἐν Ἀνατολῇ Ἀθηνῶν τῇ {ημ_short}", s["dip_date"]))
+
+    # Υπογραφές
+    story.append(Spacer(1, .2*cm))
+    sig_data = [[
+        Paragraph("ο Μέγας Διδάσκαλος<br/><br/><br/><br/>Γεώργιος Μπινιάρης", s["dip_sig"]),
+        Paragraph("", s["dip_sig"]),
+        Paragraph("ο Μέγας Γραμματεύς<br/><br/><br/><br/>Ανδρέας Αρχουζής",   s["dip_sig"]),
+    ]]
+    sig_t = Table(sig_data, colWidths=[5.5*cm, 3*cm, 5.5*cm])
+    sig_t.setStyle(TableStyle([
+        ("FONTNAME",   (0,0), (-1,-1), "DSR"),
+        ("FONTSIZE",   (0,0), (-1,-1), 10),
+        ("ALIGN",      (0,0), (-1,-1), "CENTER"),
+        ("VALIGN",     (0,0), (-1,-1), "TOP"),
+        ("TOPPADDING", (0,0), (-1,-1), 5),
+        ("LINEABOVE",  (0,0), (0,-1), .5, GOLD_D),
+        ("LINEABOVE",  (2,0), (2,-1), .5, GOLD_D),
+    ]))
+    story.append(sig_t)
+
+    if watermark:
+        story.append(Spacer(1, .2*cm))
+        story.append(Paragraph(
+            "⚠ ΑΝΤΙΓΡΑΦΟ ΑΡΧΕΙΟΥ ΣΤΟΑΣ — Το επίσημο εκδίδεται από τη Μεγάλη Στοά",
+            s["dip_wm"]))
+
+    doc.build(story)
+    buf.seek(0)
+    return buf
