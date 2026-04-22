@@ -12,7 +12,22 @@ from modules.database import (
 init_db()
 st.set_page_config(page_title="Μητρώο Μελών", page_icon="📋", layout="wide")
 st.markdown("# 📋 Μητρώο Μελών")
-st.caption("Άρθρο 36§5 — Μητρώο Στοάς · Αύξων αριθμός, στοιχεία, βαθμός, κατάσταση")
+st.caption("Άρθρο 36§5 — Μητρώο Στοάς · Αύξων αριθμός, στοιχεία, βαθμός, κατάσταση, αξιώματα")
+
+# Αξιώματα Στοάς
+ΑΞΙΩΜΑΤΑ_ΣΤΟΑΣ = [
+    "", "Σεβάσμιος", "Α' Επόπτης", "Β' Επόπτης", "Ρήτωρ", "Γραμματεύς-Σφραγιδοφύλαξ",
+    "Ταμίας", "Α' Δοκιμαστής", "Β' Δοκιμαστής", "Ελεονόμος", "Τελετάρχης", "Στεγαστής",
+    "Α' Στύλος", "Β' Στύλος", "Πρόσθετος Ρήτωρ", "Μέγας Επιθεωρητής",
+]
+ΑΞΙΩΜΑΤΑ_ΜΣ = [
+    "", "Μέγας Διδάσκαλος", "Πρόσθετος Μέγας Διδάσκαλος", "Α' Μέγας Επόπτης",
+    "Β' Μέγας Επόπτης", "Μέγας Ρήτωρ", "Μέγας Γενικός Γραμματεύς",
+    "Μέγας Δοκιμαστής", "Μέγας Θησαυροφύλαξ", "Μέγας Ελεονόμος",
+    "Μέγας Τελετάρχης", "Μέγας Στεγαστής", "Μέγας Καγκελάριος",
+    "Μέγας Επιθεωρητής", "Κοσμήτωρ", "Πρόσθετος Μέγας Αξιωματικός",
+    "Αντιπρόσωπος ΜΣ",
+]
 
 tab_list, tab_add, tab_edit, tab_card = st.tabs([
     "📋 Λίστα Μελών", "➕ Νέο Μέλος", "✏️ Επεξεργασία", "📄 Καρτέλα Μέλους"
@@ -21,15 +36,19 @@ tab_list, tab_add, tab_edit, tab_card = st.tabs([
 # ── ΤΑΒ 1: ΛΙΣΤΑ ─────────────────────────────────────────────
 with tab_list:
     col1, col2, col3 = st.columns([3, 1, 1])
-    with col1: search = st.text_input("🔍 Αναζήτηση", placeholder="Επώνυμο, όνομα, ΑΜ...")
+    with col1: search = st.text_input("🔍 Αναζήτηση", placeholder="Επώνυμο, όνομα, ΑΜ, αξίωμα...")
     with col2: filter_status = st.selectbox("Κατάσταση", ["Όλες"] + ΚΑΤΑΣΤΑΣΕΙΣ_ΜΕΛΟΥΣ)
     with col3: filter_deg = st.selectbox("Βαθμός", ["Όλοι"] + ΒΑΘΜΟΙ)
 
     df = get_all_members()
     if search:
-        mask = (df["επώνυμο"].str.contains(search, case=False, na=False) |
-                df["όνομα"].str.contains(search, case=False, na=False) |
-                df["αρ_μητρώου_στοάς"].fillna("").str.contains(search, case=False))
+        mask = (
+            df["επώνυμο"].str.contains(search, case=False, na=False) |
+            df["όνομα"].str.contains(search, case=False, na=False) |
+            df["αρ_μητρώου_στοάς"].fillna("").str.contains(search, case=False) |
+            df.get("αξίωμα_στοάς", pd.Series([""])).fillna("").str.contains(search, case=False) |
+            df.get("αξίωμα_μεγάλης_στοάς", pd.Series([""])).fillna("").str.contains(search, case=False)
+        )
         df = df[mask]
     if filter_status != "Όλες":
         df = df[df["κατάσταση"] == filter_status]
@@ -39,18 +58,33 @@ with tab_list:
     st.markdown(f"**{len(df)} μέλη**")
 
     if not df.empty:
-        show_cols = ["id", "αρ_μητρώου_στοάς", "αρ_μητρώου_μσ", "επώνυμο", "όνομα",
-                     "πατρώνυμο", "τεκτονικός_βαθμός", "ημ_μύησης", "κατάσταση",
-                     "κινητό", "email"]
+        # Στήλες: χωρίς πατρώνυμο & ημ_μύησης, με αξιώματα
+        show_cols = [
+            "id", "αρ_μητρώου_στοάς", "αρ_μητρώου_μσ",
+            "επώνυμο", "όνομα",
+            "τεκτονικός_βαθμός", "κατάσταση",
+            "αξίωμα_στοάς", "αξίωμα_μεγάλης_στοάς",
+            "κινητό", "email",
+        ]
         show_cols = [c for c in show_cols if c in df.columns]
-        st.dataframe(df[show_cols], use_container_width=True, hide_index=True,
-                     column_config={
-                         "id": st.column_config.NumberColumn("ID", width="small"),
-                         "αρ_μητρώου_στοάς": "ΑΜ Στοάς",
-                         "αρ_μητρώου_μσ":    "ΑΜ ΜΣ",
-                         "τεκτονικός_βαθμός": "Βαθμός",
-                         "κατάσταση":         "Κατάσταση",
-                     })
+        st.dataframe(
+            df[show_cols],
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "id":                    st.column_config.NumberColumn("ID", width="small"),
+                "αρ_μητρώου_στοάς":     st.column_config.TextColumn("ΑΜ Στοάς", width="small"),
+                "αρ_μητρώου_μσ":        st.column_config.TextColumn("ΑΜ ΜΣ", width="small"),
+                "επώνυμο":              st.column_config.TextColumn("Επώνυμο"),
+                "όνομα":                st.column_config.TextColumn("Όνομα"),
+                "τεκτονικός_βαθμός":   st.column_config.TextColumn("Βαθμός", width="small"),
+                "κατάσταση":            st.column_config.TextColumn("Κατάσταση", width="small"),
+                "αξίωμα_στοάς":        st.column_config.TextColumn("Αξίωμα Στοάς"),
+                "αξίωμα_μεγάλης_στοάς":st.column_config.TextColumn("Αξίωμα ΜΣ"),
+                "κινητό":              st.column_config.TextColumn("Κινητό"),
+                "email":                st.column_config.TextColumn("Email"),
+            }
+        )
         st.markdown("---")
         col_a, col_b = st.columns(2)
         with col_a:
@@ -87,7 +121,7 @@ with tab_add:
             poli = st.text_input("Πόλη")
             tk = st.text_input("ΤΚ")
 
-        st.markdown("**Στοιχεία Επικοινωνίας**")
+        st.markdown("**Επικοινωνία**")
         c1, c2, c3 = st.columns(3)
         with c1: tel = st.text_input("Τηλέφωνο")
         with c2: kin = st.text_input("Κινητό")
@@ -105,7 +139,12 @@ with tab_add:
         with c2: hm_et = st.date_input("Ημ. Εταίρου", value=None)
         with c3: hm_did = st.date_input("Ημ. Διδασκάλου", value=None)
 
-        stoa_myisis = st.text_input("Στοά Μύησης (αν υιοθετήθηκε από άλλη Στοά)")
+        st.markdown("**Αξιώματα**")
+        c1, c2 = st.columns(2)
+        with c1: ax_stoas = st.selectbox("Αξίωμα Στοάς", ΑΞΙΩΜΑΤΑ_ΣΤΟΑΣ)
+        with c2: ax_ms = st.selectbox("Αξίωμα Μεγάλης Στοάς", ΑΞΙΩΜΑΤΑ_ΜΣ)
+
+        stoa_myisis = st.text_input("Στοά Μύησης")
         notes = st.text_area("Παρατηρήσεις")
 
         if st.form_submit_button("💾 Αποθήκευση", use_container_width=True, type="primary"):
@@ -123,10 +162,12 @@ with tab_add:
                     "ημ_μύησης": str(hm_my) if hm_my else None,
                     "ημ_εταίρου": str(hm_et) if hm_et else None,
                     "ημ_διδασκάλου": str(hm_did) if hm_did else None,
-                    "στοά_μύησης": stoa_myisis, "παρατηρήσεις": notes,
+                    "στοά_μύησης": stoa_myisis,
+                    "αξίωμα_στοάς": ax_stoas,
+                    "αξίωμα_μεγάλης_στοάς": ax_ms,
+                    "παρατηρήσεις": notes,
                 })
-                st.success(f"✅ Ο/Η {ep} {on} εγγράφηκε επιτυχώς!")
-                st.rerun()
+                st.success(f"✅ Ο/Η {ep} {on} εγγράφηκε!"); st.rerun()
 
 # ── ΤΑΒ 3: ΕΠΕΞΕΡΓΑΣΙΑ ───────────────────────────────────────
 with tab_edit:
@@ -139,7 +180,6 @@ with tab_edit:
                              " (ID:" + df_all["id"].astype(str) + ")")
         sel_id = st.selectbox("Επιλογή Μέλους", df_all["id"].tolist(),
                               format_func=lambda x: df_all.loc[df_all["id"]==x, "display"].iloc[0])
-
         m = get_member(int(sel_id))
         if m:
             def sv(k, default=""): return m.get(k) or default
@@ -150,46 +190,70 @@ with tab_edit:
                 except: return None
 
             with st.form("edit_member_form"):
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    ep = st.text_input("Επώνυμο *", value=sv("επώνυμο"))
-                    on = st.text_input("Όνομα *", value=sv("όνομα"))
-                    pat = st.text_input("Πατρώνυμο", value=sv("πατρώνυμο"))
-                with c2:
-                    hm_gen = st.date_input("Ημ. Γέννησης", value=sd("ημ_γέννησης"))
-                    topos_gen = st.text_input("Τόπος Γέννησης", value=sv("τόπος_γέννησης"))
-                    epaggelma = st.text_input("Επάγγελμα", value=sv("επάγγελμα"))
-                with c3:
-                    dieuth = st.text_input("Διεύθυνση", value=sv("διεύθυνση"))
-                    poli = st.text_input("Πόλη", value=sv("πόλη"))
-                    tk = st.text_input("ΤΚ", value=sv("τκ"))
+                tab_personal, tab_contact, tab_masonic, tab_roles = st.tabs([
+                    "👤 Προσωπικά", "📞 Επικοινωνία", "⚒️ Τεκτονικά", "🏛️ Αξιώματα"
+                ])
 
-                c1, c2, c3 = st.columns(3)
-                with c1: tel = st.text_input("Τηλέφωνο", value=sv("τηλέφωνο"))
-                with c2: kin = st.text_input("Κινητό", value=sv("κινητό"))
-                with c3: em = st.text_input("Email", value=sv("email"))
+                with tab_personal:
+                    c1, c2, c3 = st.columns(3)
+                    with c1:
+                        ep  = st.text_input("Επώνυμο *", value=sv("επώνυμο"))
+                        on  = st.text_input("Όνομα *",   value=sv("όνομα"))
+                        pat = st.text_input("Πατρώνυμο", value=sv("πατρώνυμο"))
+                    with c2:
+                        hm_gen    = st.date_input("Ημ. Γέννησης",   value=sd("ημ_γέννησης"))
+                        topos_gen = st.text_input("Τόπος Γέννησης",  value=sv("τόπος_γέννησης"))
+                        epaggelma = st.text_input("Επάγγελμα",       value=sv("επάγγελμα"))
+                    with c3:
+                        dieuth = st.text_input("Διεύθυνση", value=sv("διεύθυνση"))
+                        poli   = st.text_input("Πόλη",      value=sv("πόλη"))
+                        tk     = st.text_input("ΤΚ",        value=sv("τκ"))
+                    notes = st.text_area("Παρατηρήσεις", value=sv("παρατηρήσεις"))
 
-                c1, c2, c3, c4 = st.columns(4)
-                with c1: am_stoas = st.text_input("ΑΜ Στοάς", value=sv("αρ_μητρώου_στοάς"))
-                with c2: am_ms = st.text_input("ΑΜ ΜΣ", value=sv("αρ_μητρώου_μσ"))
-                with c3:
-                    deg_idx = ΒΑΘΜΟΙ.index(m.get("τεκτονικός_βαθμός","Μαθητής")) if m.get("τεκτονικός_βαθμός") in ΒΑΘΜΟΙ else 0
-                    βαθμός = st.selectbox("Βαθμός", ΒΑΘΜΟΙ, index=deg_idx)
-                with c4:
-                    kat_idx = ΚΑΤΑΣΤΑΣΕΙΣ_ΜΕΛΟΥΣ.index(m.get("κατάσταση","Ενεργός")) if m.get("κατάσταση") in ΚΑΤΑΣΤΑΣΕΙΣ_ΜΕΛΟΥΣ else 0
-                    κατ = st.selectbox("Κατάσταση", ΚΑΤΑΣΤΑΣΕΙΣ_ΜΕΛΟΥΣ, index=kat_idx)
+                with tab_contact:
+                    c1, c2, c3 = st.columns(3)
+                    with c1: tel = st.text_input("Τηλέφωνο", value=sv("τηλέφωνο"))
+                    with c2: kin = st.text_input("Κινητό",   value=sv("κινητό"))
+                    with c3: em  = st.text_input("Email",    value=sv("email"))
 
-                c1, c2, c3 = st.columns(3)
-                with c1: hm_my = st.date_input("Ημ. Μύησης", value=sd("ημ_μύησης"))
-                with c2: hm_et = st.date_input("Ημ. Εταίρου", value=sd("ημ_εταίρου"))
-                with c3: hm_did = st.date_input("Ημ. Διδασκάλου", value=sd("ημ_διδασκάλου"))
+                with tab_masonic:
+                    c1, c2, c3, c4 = st.columns(4)
+                    with c1: am_stoas = st.text_input("ΑΜ Στοάς", value=sv("αρ_μητρώου_στοάς"))
+                    with c2: am_ms    = st.text_input("ΑΜ ΜΣ",   value=sv("αρ_μητρώου_μσ"))
+                    with c3:
+                        deg_idx = ΒΑΘΜΟΙ.index(m.get("τεκτονικός_βαθμός","Μαθητής")) if m.get("τεκτονικός_βαθμός") in ΒΑΘΜΟΙ else 0
+                        βαθμός = st.selectbox("Βαθμός", ΒΑΘΜΟΙ, index=deg_idx)
+                    with c4:
+                        kat_idx = ΚΑΤΑΣΤΑΣΕΙΣ_ΜΕΛΟΥΣ.index(m.get("κατάσταση","Ενεργός")) if m.get("κατάσταση") in ΚΑΤΑΣΤΑΣΕΙΣ_ΜΕΛΟΥΣ else 0
+                        κατ = st.selectbox("Κατάσταση", ΚΑΤΑΣΤΑΣΕΙΣ_ΜΕΛΟΥΣ, index=kat_idx)
 
-                stoa_myisis = st.text_input("Στοά Μύησης", value=sv("στοά_μύησης"))
-                notes = st.text_area("Παρατηρήσεις", value=sv("παρατηρήσεις"))
+                    c1, c2, c3 = st.columns(3)
+                    with c1: hm_my  = st.date_input("Ημ. Μύησης (Α')",    value=sd("ημ_μύησης"))
+                    with c2: hm_et  = st.date_input("Ημ. Εταίρου (Β')",   value=sd("ημ_εταίρου"))
+                    with c3: hm_did = st.date_input("Ημ. Διδασκάλου (Γ')",value=sd("ημ_διδασκάλου"))
+                    stoa_myisis = st.text_input("Στοά Μύησης", value=sv("στοά_μύησης"))
+
+                with tab_roles:
+                    st.markdown("#### 🏛️ Αξίωμα Στοάς ΑΚΡΟΠΟΛΙΣ #84")
+                    cur_ax_stoas = sv("αξίωμα_στοάς")
+                    try:    ax_stoas_idx = ΑΞΙΩΜΑΤΑ_ΣΤΟΑΣ.index(cur_ax_stoas)
+                    except: ax_stoas_idx = 0
+                    ax_stoas = st.selectbox("Αξίωμα Στοάς", ΑΞΙΩΜΑΤΑ_ΣΤΟΑΣ, index=ax_stoas_idx)
+
+                    st.markdown("#### 🏛️ Αξίωμα Μεγάλης Στοάς")
+                    cur_ax_ms = sv("αξίωμα_μεγάλης_στοάς")
+                    try:    ax_ms_idx = ΑΞΙΩΜΑΤΑ_ΜΣ.index(cur_ax_ms)
+                    except: ax_ms_idx = 0
+                    ax_ms = st.selectbox("Αξίωμα Μεγάλης Στοάς", ΑΞΙΩΜΑΤΑ_ΜΣ, index=ax_ms_idx)
+
+                    if cur_ax_stoas or cur_ax_ms:
+                        st.info(f"**Τρέχοντα αξιώματα:**  "
+                                f"Στοάς: **{cur_ax_stoas or '—'}**  |  "
+                                f"ΜΣ: **{cur_ax_ms or '—'}**")
 
                 c1, c2 = st.columns(2)
                 with c1: save_btn = st.form_submit_button("💾 Αποθήκευση", use_container_width=True, type="primary")
-                with c2: del_btn  = st.form_submit_button("🗑️ Διαγραφή", use_container_width=True)
+                with c2: del_btn  = st.form_submit_button("🗑️ Διαγραφή",  use_container_width=True)
 
                 if save_btn:
                     save_member({
@@ -204,7 +268,10 @@ with tab_edit:
                         "ημ_μύησης": str(hm_my) if hm_my else None,
                         "ημ_εταίρου": str(hm_et) if hm_et else None,
                         "ημ_διδασκάλου": str(hm_did) if hm_did else None,
-                        "στοά_μύησης": stoa_myisis, "παρατηρήσεις": notes,
+                        "στοά_μύησης": stoa_myisis,
+                        "αξίωμα_στοάς": ax_stoas,
+                        "αξίωμα_μεγάλης_στοάς": ax_ms,
+                        "παρατηρήσεις": notes,
                     })
                     st.success("✅ Αποθηκεύτηκε!"); st.rerun()
                 if del_btn:
@@ -214,13 +281,12 @@ with tab_edit:
 # ── ΤΑΒ 4: ΚΑΡΤΕΛΑ ΜΕΛΟΥΣ (PDF) ──────────────────────────────
 with tab_card:
     st.subheader("📄 Εκτύπωση Καρτέλας Αδ∴")
-    st.caption("Επιλέξτε μέλος από τη λίστα και κατεβάστε την πλήρη καρτέλα του σε PDF")
+    st.caption("Περιλαμβάνει πλήρη στοιχεία, αξιώματα και ημερομηνίες")
 
     df_card = get_all_members()
     if df_card.empty:
         st.info("Δεν υπάρχουν μέλη.")
     else:
-        # Φίλτρο γρήγορης εύρεσης
         col1, col2 = st.columns([2, 1])
         with col1:
             search_card = st.text_input("🔍 Αναζήτηση Αδ∴",
@@ -237,59 +303,46 @@ with tab_card:
             df_f = df_f[df_f["τεκτονικός_βαθμός"] == deg_card]
 
         if df_f.empty:
-            st.warning("Δεν βρέθηκαν μέλη με αυτά τα κριτήρια.")
+            st.warning("Δεν βρέθηκαν μέλη.")
         else:
             df_f["display"] = (
                 df_f["επώνυμο"] + "  " + df_f["όνομα"] +
-                "   |   " + df_f["τεκτονικός_βαθμός"].fillna("") +
-                "   |   ΑΜ Στοάς: " + df_f["αρ_μητρώου_στοάς"].fillna("—")
+                "  |  " + df_f["τεκτονικός_βαθμός"].fillna("") +
+                "  |  ΑΜ: " + df_f["αρ_μητρώου_στοάς"].fillna("—")
             )
-
             sel_card_id = st.selectbox(
-                "Επιλογή Αδ∴",
-                df_f["id"].tolist(),
+                "Επιλογή Αδ∴", df_f["id"].tolist(),
                 format_func=lambda x: df_f.loc[df_f["id"]==x, "display"].iloc[0],
                 key="sel_card"
             )
-
             m_card = get_member(int(sel_card_id))
             if m_card:
                 st.markdown("---")
-
-                # Preview καρτέλας
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     st.markdown("**Ονοματεπώνυμο**")
                     st.info(f"{m_card.get('επώνυμο','')} {m_card.get('όνομα','')}")
-                    st.markdown("**Πατρώνυμο**")
-                    st.write(m_card.get('πατρώνυμο') or '—')
-                    st.markdown("**Επάγγελμα**")
-                    st.write(m_card.get('επάγγελμα') or '—')
+                    st.markdown("**Πατρώνυμο**");  st.write(m_card.get('πατρώνυμο') or '—')
+                    st.markdown("**Επάγγελμα**");  st.write(m_card.get('επάγγελμα') or '—')
                 with col2:
-                    st.markdown("**Τεκτονικός Βαθμός**")
                     deg = m_card.get('τεκτονικός_βαθμός','')
                     badge = {"Μαθητής":"🔵","Εταίρος":"🟡","Διδάσκαλος":"🔴"}.get(deg,"⚪")
-                    st.info(f"{badge} {deg}")
-                    st.markdown("**Κατάσταση**")
-                    st.write(m_card.get('κατάσταση') or '—')
+                    st.markdown("**Τεκτονικός Βαθμός**"); st.info(f"{badge} {deg}")
+                    st.markdown("**Κατάσταση**"); st.write(m_card.get('κατάσταση') or '—')
                     st.markdown("**ΑΜ Στοάς / ΑΜ ΜΣ**")
                     st.write(f"{m_card.get('αρ_μητρώου_στοάς') or '—'} / {m_card.get('αρ_μητρώου_μσ') or '—'}")
                 with col3:
-                    st.markdown("**Ημ. Μύησης**")
-                    st.write(m_card.get('ημ_μύησης') or '—')
-                    st.markdown("**Κινητό**")
-                    st.write(m_card.get('κινητό') or '—')
-                    st.markdown("**Email**")
-                    st.write(m_card.get('email') or '—')
+                    st.markdown("**Αξίωμα Στοάς**")
+                    st.write(m_card.get('αξίωμα_στοάς') or '—')
+                    st.markdown("**Αξίωμα Μεγάλης Στοάς**")
+                    st.write(m_card.get('αξίωμα_μεγάλης_στοάς') or '—')
+                    st.markdown("**Κινητό**"); st.write(m_card.get('κινητό') or '—')
 
                 st.markdown("---")
-
-                # Κουμπί λήψης PDF
                 from modules.pdf_gen import generate_member_card_pdf
                 pdf_buf = generate_member_card_pdf(m_card)
                 ep_name = m_card.get('επώνυμο','').replace(' ','_')
                 on_name = m_card.get('όνομα','').replace(' ','_')
-
                 st.download_button(
                     label=f"📄 Λήψη Καρτέλας PDF — {m_card.get('επώνυμο','')} {m_card.get('όνομα','')}",
                     data=pdf_buf,
