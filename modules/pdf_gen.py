@@ -23,37 +23,41 @@ from reportlab.pdfbase.ttfonts import TTFont
 # ── ΚΑΤΑΧΩΡΗΣΗ ΓΡΑΜΜΑΤΟΣΕΙΡΩΝ ─────────────────────────────────
 def _register_fonts():
     """
-    Καταχώρηση DejaVu Serif με πλήρη υποστήριξη ελληνικών.
-    Τα fonts είναι bundled στον φάκελο /fonts του project.
+    DejaVu Serif  → κείμενο (DSR/DSB/DSI/DSBI)
+    DejaVu Sans   → επικεφαλίδες με σύμβολο ∴ (DSS/DSSB)
+    Bundled στον φάκελο /fonts/ του project.
     """
     import os
-    # Βρίσκουμε τον φάκελο fonts σχετικά με αυτό το αρχείο
-    base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    base      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     fonts_dir = os.path.join(base, "fonts")
+    system_dir= "/usr/share/fonts/truetype/dejavu"
 
-    # Fallback: system fonts αν δεν υπάρχει ο φάκελος (local dev)
-    system_dir = "/usr/share/fonts/truetype/dejavu"
-
-    def font_path(name):
+    def fp(name):
         local = os.path.join(fonts_dir, name)
-        if os.path.exists(local):
-            return local
+        if os.path.exists(local): return local
         system = os.path.join(system_dir, name)
-        if os.path.exists(system):
-            return system
-        raise FileNotFoundError(f"Font not found: {name}. Put it in {fonts_dir}/")
+        if os.path.exists(system): return system
+        raise FileNotFoundError(f"Font not found: {name} — copy it to {fonts_dir}/")
 
-    pdfmetrics.registerFont(TTFont("DSR",  font_path("DejaVuSerif.ttf")))
-    pdfmetrics.registerFont(TTFont("DSB",  font_path("DejaVuSerif-Bold.ttf")))
-    pdfmetrics.registerFont(TTFont("DSI",  font_path("DejaVuSerif-Italic.ttf")))
-    pdfmetrics.registerFont(TTFont("DSBI", font_path("DejaVuSerif-BoldItalic.ttf")))
+    pdfmetrics.registerFont(TTFont("DSR",  fp("DejaVuSerif.ttf")))
+    pdfmetrics.registerFont(TTFont("DSB",  fp("DejaVuSerif-Bold.ttf")))
+    pdfmetrics.registerFont(TTFont("DSI",  fp("DejaVuSerif-Italic.ttf")))
+    pdfmetrics.registerFont(TTFont("DSBI", fp("DejaVuSerif-BoldItalic.ttf")))
     pdfmetrics.registerFontFamily("DejaVuSerif",
                                    normal="DSR", bold="DSB",
                                    italic="DSI", boldItalic="DSBI")
+    # DejaVu Sans — υποστηρίζει ∴ (U+2234), χρησιμοποιείται στις κεφαλίδες
+    pdfmetrics.registerFont(TTFont("DSS",  fp("DejaVuSans.ttf")))
+    pdfmetrics.registerFont(TTFont("DSSB", fp("DejaVuSans-Bold.ttf")))
 
 _register_fonts()
 
 # ── ΣΤΑΘΕΡΕΣ ─────────────────────────────────────────────────
+# Χρησιμοποιούμε DSS (Sans) για το ∴ — Serif δεν έχει αυτό το glyph
+LODGE_HDR1  = "Ε∴Δ∴Τ∴Μ∴Α∴Τ∴Σ∴"
+LODGE_HDR2  = "Εν Ονόματι και Υπό την Αιγίδα"
+LODGE_HDR3  = "της Μεγάλης Στοάς της Ελλάδος"
+LODGE_HDR4  = "των Αρχαίων Ελευθέρων και Αποδεδεγμένων Τεκτόνων"
 LODGE_NAME  = "Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ υπ' αρ. 84     εν Αν∴ Αθ∴"
 NAVY   = colors.HexColor("#1a2a4a")
 GOLD   = colors.HexColor("#b8960c")
@@ -81,19 +85,21 @@ def _S(**kw) -> ParagraphStyle:
 
 def _styles() -> Dict:
     return {
-        "lodge":    _S(fontName="DSB",  fontSize=10,  alignment=TA_CENTER, spaceAfter=3, textColor=NAVY),
-        "cc":       _S(fontName="DSR",  fontSize=10,  alignment=TA_CENTER, spaceAfter=3, textColor=NAVY),
+        # ── Κεφαλίδα (DejaVu Sans — υποστηρίζει ∴) ──────────
+        "lodge":    _S(fontName="DSSB", fontSize=10,  alignment=TA_CENTER, spaceAfter=3, textColor=NAVY),
+        "cc":       _S(fontName="DSS",  fontSize=10,  alignment=TA_CENTER, spaceAfter=3, textColor=NAVY),
+        # ── Σώμα εγγράφου (DejaVu Serif) ─────────────────────
         "title":    _S(fontName="DSB",  fontSize=13,  alignment=TA_CENTER, spaceAfter=6, spaceBefore=6, textColor=NAVY),
         "bold":     _S(fontName="DSB",  fontSize=10,  spaceAfter=4),
         "body":     _S(fontName="DSR",  fontSize=10,  alignment=TA_JUSTIFY, spaceAfter=8, leading=16),
         "indent":   _S(fontName="DSR",  fontSize=10,  alignment=TA_JUSTIFY, leftIndent=20, spaceAfter=5, leading=15),
         "bullet":   _S(fontName="DSR",  fontSize=10,  leftIndent=30, spaceAfter=4, leading=14),
         "small":    _S(fontName="DSI",  fontSize=8,   textColor=colors.grey, spaceAfter=3, alignment=TA_CENTER),
-        "tbl_hdr":  _S(fontName="DSB",  fontSize=9,   textColor=WHITE, alignment=TA_CENTER),
-        "tbl_cell": _S(fontName="DSR",  fontSize=9,   alignment=TA_LEFT),
+        "tbl_hdr":  _S(fontName="DSSB", fontSize=6.5, textColor=WHITE, alignment=TA_CENTER),
+        "tbl_cell": _S(fontName="DSR",  fontSize=7,   alignment=TA_LEFT),
         "sig":      _S(fontName="DSR",  fontSize=10,  alignment=TA_CENTER, spaceBefore=30),
-        # Δίπλωμα styles
-        "dip_hdr1": _S(fontName="DSB",  fontSize=18,  alignment=TA_CENTER, textColor=NAVY, spaceAfter=4, spaceBefore=4),
+        # ── Δίπλωμα ──────────────────────────────────────────
+        "dip_hdr1": _S(fontName="DSSB", fontSize=18,  alignment=TA_CENTER, textColor=NAVY, spaceAfter=4, spaceBefore=4),
         "dip_hdr2": _S(fontName="DSI",  fontSize=12,  alignment=TA_CENTER, textColor=NAVY, spaceAfter=8),
         "dip_intro":_S(fontName="DSI",  fontSize=11,  alignment=TA_CENTER, textColor=NAVY, spaceAfter=4, leading=18),
         "dip_name": _S(fontName="DSB",  fontSize=22,  alignment=TA_CENTER, textColor=NAVY, spaceAfter=6, spaceBefore=6),
@@ -107,10 +113,10 @@ def _styles() -> Dict:
 def _header(s: Dict) -> List:
     """Τεκτονική κεφαλίδα για όλα τα έγγραφα."""
     return [
-        Paragraph("Ε∴Δ∴Τ∴Μ∴Α∴Τ∴Σ∴", s["lodge"]),
-        Paragraph("Εν Ονόματι και Υπό την Αιγίδα", s["cc"]),
-        Paragraph("της Μεγάλης Στοάς της Ελλάδος", s["cc"]),
-        Paragraph("των Αρχαίων Ελευθέρων και Αποδεδεγμένων Τεκτόνων", s["cc"]),
+        Paragraph(LODGE_HDR1, s["lodge"]),
+        Paragraph(LODGE_HDR2, s["cc"]),
+        Paragraph(LODGE_HDR3, s["cc"]),
+        Paragraph(LODGE_HDR4, s["cc"]),
         Spacer(1, .2*cm),
         Paragraph(f"<b>{LODGE_NAME}</b>", s["lodge"]),
         Spacer(1, .2*cm),
@@ -133,14 +139,16 @@ def _table_style(header_cols: int = -1) -> TableStyle:
     return TableStyle([
         ("BACKGROUND",    (0, 0), (-1, 0),  NAVY),
         ("TEXTCOLOR",     (0, 0), (-1, 0),  WHITE),
-        ("FONTNAME",      (0, 0), (-1, 0),  "DSB"),
-        ("FONTSIZE",      (0, 0), (-1, -1), 9),
+        ("FONTNAME",      (0, 0), (-1, 0),  "DSSB"),
+        ("FONTSIZE",      (0, 0), (-1, -1), 7),
         ("FONTNAME",      (0, 1), (-1, -1), "DSR"),
         ("ROWBACKGROUNDS",(0, 1), (-1, -1), [WHITE, LIGHT]),
         ("GRID",          (0, 0), (-1, -1), .25, colors.lightgrey),
         ("BOX",           (0, 0), (-1, -1), 1,  NAVY),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING",    (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING",    (0, 0), (-1, -1), 2),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 3),
         ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
     ])
 
@@ -409,27 +417,36 @@ def generate_members_list_pdf(members_df) -> io.BytesIO:
     story.append(Paragraph(f"Ημερομηνία: {date.today().strftime('%d/%m/%Y')}", s["small"]))
     story.append(Spacer(1, .4*cm))
 
+    def clean(v):
+        if v is None: return ""
+        sv = str(v).strip()
+        return "" if sv.lower() in ("nan","none","") else sv
+
     headers = [
-        Paragraph("ΑΜ\nΣτοάς", s["tbl_hdr"]),
-        Paragraph("ΑΜ ΜΣ",    s["tbl_hdr"]),
-        Paragraph("Επώνυμο",  s["tbl_hdr"]),
-        Paragraph("Όνομα",    s["tbl_hdr"]),
-        Paragraph("Βαθμός",   s["tbl_hdr"]),
-        Paragraph("Ημ. Μύησης",s["tbl_hdr"]),
-        Paragraph("Κατάσταση",s["tbl_hdr"]),
+        Paragraph("ΑΜ\nΣτοάς",    s["tbl_hdr"]),
+        Paragraph("ΑΜ ΜΣ",         s["tbl_hdr"]),
+        Paragraph("Επώνυμο",       s["tbl_hdr"]),
+        Paragraph("Όνομα",         s["tbl_hdr"]),
+        Paragraph("Βαθμός",        s["tbl_hdr"]),
+        Paragraph("Κατάσταση",     s["tbl_hdr"]),
+        Paragraph("Αξίωμα Στοάς",  s["tbl_hdr"]),
+        Paragraph("Αξίωμα ΜΣ",     s["tbl_hdr"]),
     ]
     data = [headers]
     for _, r in members_df.iterrows():
         data.append([
-            Paragraph(str(r.get("αρ_μητρώου_στοάς","") or ""), s["tbl_cell"]),
-            Paragraph(str(r.get("αρ_μητρώου_μσ","")   or ""), s["tbl_cell"]),
-            Paragraph(str(r.get("επώνυμο","")          or ""), s["tbl_cell"]),
-            Paragraph(str(r.get("όνομα","")            or ""), s["tbl_cell"]),
-            Paragraph(str(r.get("τεκτονικός_βαθμός","")or ""), s["tbl_cell"]),
-            Paragraph(str(r.get("ημ_μύησης","")        or ""), s["tbl_cell"]),
-            Paragraph(str(r.get("κατάσταση","")        or ""), s["tbl_cell"]),
+            Paragraph(clean(r.get("αρ_μητρώου_στοάς")),         s["tbl_cell"]),
+            Paragraph(clean(r.get("αρ_μητρώου_μσ")),            s["tbl_cell"]),
+            Paragraph(clean(r.get("επώνυμο")),                   s["tbl_cell"]),
+            Paragraph(clean(r.get("όνομα")),                     s["tbl_cell"]),
+            Paragraph(clean(r.get("τεκτονικός_βαθμός")),        s["tbl_cell"]),
+            Paragraph(clean(r.get("κατάσταση")),                 s["tbl_cell"]),
+            Paragraph(clean(r.get("αξίωμα_στοάς","")),          s["tbl_cell"]),
+            Paragraph(clean(r.get("αξίωμα_μεγάλης_στοάς","")), s["tbl_cell"]),
         ])
-    t = Table(data, colWidths=[1.5*cm, 2*cm, 4*cm, 3*cm, 2.5*cm, 2.8*cm, 2.2*cm])
+
+    col_w = [1.3*cm, 1.5*cm, 3.8*cm, 2.8*cm, 1.9*cm, 1.7*cm, 2.8*cm, 2.7*cm]
+    t = Table(data, colWidths=col_w, repeatRows=1)
     t.setStyle(_table_style())
     story.append(t)
     story.append(Spacer(1, .3*cm))
@@ -439,10 +456,10 @@ def generate_members_list_pdf(members_df) -> io.BytesIO:
     sig = Table([["", Paragraph("Ο Γραμματεύς-Σφραγιδοφύλαξ", s["sig"])]],
                 colWidths=[8*cm, 8*cm])
     sig.setStyle(TableStyle([
-        ("TOPPADDING",  (0,0), (-1,-1), 30),
-        ("LINEABOVE",   (1,0), (1,-1), .5, BLACK),
-        ("ALIGN",       (1,0), (1,-1), "CENTER"),
-        ("FONTNAME",    (0,0), (-1,-1), "DSR"),
+        ("TOPPADDING", (0,0), (-1,-1), 30),
+        ("LINEABOVE",  (1,0), (1,-1), .5, BLACK),
+        ("ALIGN",      (1,0), (1,-1), "CENTER"),
+        ("FONTNAME",   (0,0), (-1,-1), "DSR"),
     ]))
     story.append(sig)
     return _build(story)
