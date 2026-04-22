@@ -58,13 +58,16 @@ def get_conn():
     pg_url = _get_pg_url()
     if pg_url:
         import psycopg2
+        # Supabase απαιτεί sslmode=require
+        if "sslmode" not in pg_url:
+            pg_url = pg_url + "?sslmode=require"
         conn = psycopg2.connect(pg_url)
         conn.autocommit = False
-        return conn
+        return DBConn(conn)
     else:
         conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         conn.execute("PRAGMA foreign_keys = ON")
-        return conn
+        return DBConn(conn)
 
 
 def _is_pg(conn) -> bool:
@@ -74,6 +77,47 @@ def _is_pg(conn) -> bool:
         return isinstance(conn, psycopg2.extensions.connection)
     except ImportError:
         return False
+
+
+class DBConn:
+    """
+    Wrapper που ενοποιεί SQLite και PostgreSQL API.
+    Μετατρέπει αυτόματα '?' → '%s' για PostgreSQL.
+    """
+    def __init__(self, raw_conn):
+        self._c = raw_conn
+        self.pg = _is_pg(raw_conn)
+
+    def _sql(self, sql):
+        return sql.replace('?', '%s') if self.pg else sql
+
+    def execute(self, sql, params=()):
+        cur = self._c.cursor()
+        cur.execute(self._sql(sql), params)
+        return cur
+
+    def read_sql(self, sql, params=()):
+        """Επιστρέφει DataFrame."""
+        import pandas as pd
+        if params:
+            cur = self.execute(sql, params)
+            cols = [d[0] for d in cur.description]
+            rows = cur.fetchall()
+            return pd.DataFrame(rows, columns=cols)
+        return pd.read_sql_query(sql, self._c)
+
+    def commit(self):
+        self._c.commit()
+
+    def rollback(self):
+        self._c.rollback()
+
+    def close(self):
+        self._c.close()
+
+    def cursor(self):
+        return self._c.cursor()
+
 
 
 def _adapt_sql(sql: str, conn) -> str:
@@ -87,11 +131,9 @@ def _adapt_sql(sql: str, conn) -> str:
 def init_db():
     """Δημιουργία όλων των πινάκων (idempotent). Λειτουργεί με SQLite και PostgreSQL."""
     conn = get_conn()
-    c = conn.cursor()
-    pg = _is_pg(conn)
 
     def exe(sql):
-        c.execute(_adapt_sql(sql, conn))
+        conn.execute(_adapt_sql(sql, conn))
 
     # ── 1. ΜΕΛΗ — Μητρώο Στοάς (Άρθρο 36§5) ─────────────────────────────
     exe("""
@@ -305,15 +347,16 @@ def get_all_members(status: str = "all") -> pd.DataFrame:
     if status != "all":
         q += f" WHERE κατάσταση='{status}'"
     q += " ORDER BY επώνυμο, όνομα"
-    df = pd.read_sql_query(q, conn)
+    df = conn.read_sql(q)
     conn.close()
     return df
 
 
 def get_member(mid: int) -> Optional[Dict]:
     conn = get_conn()
-    row = conn.execute("SELECT * FROM μέλη WHERE id=?", (mid,)).fetchone()
-    cols = [d[0] for d in conn.execute("SELECT * FROM μέλη LIMIT 0").description]
+    cur = conn.execute("SELECT * FROM μέλη WHERE id=?", (mid,))
+    row = cur.fetchone()
+    cols = [d[0] for d in cur.description]
     conn.close()
     return dict(zip(cols, row)) if row else None
 
@@ -349,7 +392,7 @@ def get_members_dropdown(active_only: bool = True) -> pd.DataFrame:
     if active_only:
         q += " WHERE κατάσταση='Ενεργός'"
     q += " ORDER BY επώνυμο"
-    df = pd.read_sql_query(q, conn)
+    df = conn.read_sql(q)
     conn.close()
     return df
 
@@ -376,7 +419,7 @@ def get_sessions(βαθμός: str = "all") -> pd.DataFrame:
     if βαθμός != "all":
         q += f" WHERE βαθμός='{βαθμός}'"
     q += " ORDER BY ημερομηνία DESC"
-    df = pd.read_sql_query(q, conn)
+    df = conn.read_sql(q)
     conn.close()
     return df
 
@@ -484,7 +527,7 @@ def get_protokollon(year: int = None, direction: str = "all") -> pd.DataFrame:
     if direction != "all":
         q += f" AND κατεύθυνση='{direction}'"
     q += " ORDER BY αρ_πρωτ DESC"
-    df = pd.read_sql_query(q, conn)
+    df = conn.read_sql(q)
     conn.close()
     return df
 
@@ -524,7 +567,7 @@ def get_entalmata(βιβλίο: str = "all") -> pd.DataFrame:
     if βιβλίο != "all":
         q += f" WHERE βιβλίο='{βιβλίο}'"
     q += " ORDER BY ημερομηνία DESC"
-    df = pd.read_sql_query(q, conn)
+    df = conn.read_sql(q)
     conn.close()
     return df
 
@@ -589,7 +632,7 @@ def get_metavoles(mid: int = None) -> pd.DataFrame:
     if mid:
         q += f" WHERE mv.μέλος_id={mid}"
     q += " ORDER BY mv.ημερομηνία DESC"
-    df = pd.read_sql_query(q, conn)
+    df = conn.read_sql(q)
     conn.close()
     return df
 
@@ -691,7 +734,7 @@ def get_diabevaiosis_myoumenon(βαθμός: str = "all") -> pd.DataFrame:
     if βαθμός != "all":
         q += f" WHERE δμ.βαθμός='{βαθμός}'"
     q += " ORDER BY δμ.ημ_μύησης DESC"
-    df = pd.read_sql_query(q, conn)
+    df = conn.read_sql(q)
     conn.close()
     return df
 
@@ -722,7 +765,7 @@ def get_aporriphthentes(search: str = "") -> pd.DataFrame:
     if search:
         q += f" WHERE επώνυμο LIKE '%{search}%' OR όνομα LIKE '%{search}%'"
     q += " ORDER BY επώνυμο"
-    df = pd.read_sql_query(q, conn)
+    df = conn.read_sql(q)
     conn.close()
     return df
 
@@ -749,7 +792,7 @@ def save_aporriphtheis(data: Dict) -> int:
 
 def get_chrysi_vivlos() -> pd.DataFrame:
     conn = get_conn()
-    df = pd.read_sql_query("SELECT * FROM χρυσή_βίβλος ORDER BY ημερομηνία DESC", conn)
+    df = conn.read_sql("SELECT * FROM χρυσή_βίβλος ORDER BY ημερομηνία DESC")
     conn.close()
     return df
 
@@ -784,7 +827,7 @@ def get_deltia(status: str = "all") -> pd.DataFrame:
     if status != "all":
         q += f" WHERE δδ.κατάσταση='{status}'"
     q += " ORDER BY δδ.ημ_αίτησης DESC"
-    df = pd.read_sql_query(q, conn)
+    df = conn.read_sql(q)
     conn.close()
     return df
 
@@ -862,7 +905,7 @@ def get_ergasies(status: str = "all") -> pd.DataFrame:
     if status != "all":
         q += f" WHERE κατάσταση='{status}'"
     q += " ORDER BY ημ_λήξης ASC NULLS LAST, προτεραιότητα DESC"
-    df = pd.read_sql_query(q, conn)
+    df = conn.read_sql(q)
     conn.close()
     return df
 
