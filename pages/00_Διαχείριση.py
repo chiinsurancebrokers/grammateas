@@ -131,3 +131,76 @@ except Exception as e:
     st.error(f"Σφάλμα: {e}")
 finally:
     conn.close()
+
+# ── SUPABASE ΟΔΗΓΟΣ ───────────────────────────────────────────
+st.markdown("---")
+st.subheader("☁️ Μόνιμη Αποθήκευση — Supabase")
+
+pg_configured = False
+try:
+    import streamlit as st2
+    pg_url = st2.secrets.get("database", {}).get("url", "")
+    pg_configured = bool(pg_url and pg_url.startswith("postgresql"))
+except Exception:
+    pass
+
+if pg_configured:
+    st.success("✅ **Supabase PostgreSQL ενεργό** — Τα δεδομένα αποθηκεύονται μόνιμα!")
+else:
+    st.warning("""
+⚠️ **Χρησιμοποιείτε SQLite** — Τα δεδομένα χάνονται κάθε φορά που κάνει restart η εφαρμογή.
+
+### Οδηγός ρύθμισης Supabase (δωρεάν):
+
+**Βήμα 1 — Δημιουργία account:**
+Πηγαίνετε στο [supabase.com](https://supabase.com) → Sign Up (δωρεάν)
+
+**Βήμα 2 — Νέο Project:**
+- New Project → Ονομάστε το `akropolis`
+- Επιλέξτε region: `West EU (Ireland)`
+- Σημειώστε το **Database Password**
+
+**Βήμα 3 — Connection String:**
+- Settings → Database → Connection string → **URI**
+- Αντιγράψτε το (μοιάζει με `postgresql://postgres:PASSWORD@db.xxx.supabase.co:5432/postgres`)
+
+**Βήμα 4 — Streamlit Secrets:**
+Streamlit Cloud → Manage app → Settings → **Secrets** → προσθέστε:
+```toml
+[database]
+url = "postgresql://postgres:ΤΟ_PASSWORD_ΣΑΣ@db.XXXXX.supabase.co:5432/postgres"
+```
+
+**Βήμα 5 — Reboot app** → η εφαρμογή αναγνωρίζει αυτόματα το Supabase!
+
+> Η εφαρμογή δημιουργεί αυτόματα όλους τους πίνακες στο Supabase.
+> Θα χρειαστεί να εισάγετε ξανά τα δεδομένα (ή να χρησιμοποιήσετε το παρακάτω εργαλείο).
+""")
+
+# Backup/Restore SQLite
+st.markdown("---")
+st.subheader("💾 Backup & Restore Βάσης (SQLite)")
+st.caption("Κατεβάστε την τρέχουσα βάση ή επαναφέρετε από αντίγραφο")
+
+import os
+col1, col2 = st.columns(2)
+with col1:
+    if os.path.exists("grammateas.db"):
+        with open("grammateas.db", "rb") as f:
+            st.download_button(
+                "📥 Download Βάσης (.db)",
+                data=f.read(),
+                file_name=f"grammateas_backup_{date.today()}.db",
+                mime="application/octet-stream",
+                use_container_width=True,
+                type="primary"
+            )
+        st.caption("Κρατήστε αυτό το αρχείο ως backup!")
+
+with col2:
+    uploaded_db = st.file_uploader("📤 Restore από backup", type=["db"])
+    if uploaded_db:
+        with open("grammateas.db", "wb") as f:
+            f.write(uploaded_db.read())
+        st.success("✅ Η βάση επαναφέρθηκε!")
+        st.rerun()

@@ -2,12 +2,21 @@
 """
 Βάση Δεδομένων — Γραμματεύς-Σφραγιδοφύλαξ
 Καλύπτει Άρθρα 35-41 Γενικού Κανονισμού Μεγάλης Στοάς Ελλάδος
+
+Υποστηρίζει:
+  • PostgreSQL (Supabase) — μόνιμη αποθήκευση, για Streamlit Cloud
+  • SQLite — για τοπική ανάπτυξη / fallback
+
+Ρύθμιση Supabase στα Streamlit Secrets:
+  [database]
+  url = "postgresql://postgres:[PASSWORD]@db.[PROJECT].supabase.co:5432/postgres"
 """
 import sqlite3
 import pandas as pd
 from datetime import datetime, date, timedelta
 from typing import Optional, Dict, List
 import json
+import os
 
 DB_PATH = "grammateas.db"
 
@@ -28,19 +37,64 @@ DB_PATH = "grammateas.db"
 ]
 
 
-def get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+def _get_pg_url() -> Optional[str]:
+    """Διαβάζει το PostgreSQL URL από τα Streamlit Secrets (αν υπάρχουν)."""
+    try:
+        import streamlit as st
+        url = st.secrets.get("database", {}).get("url", "")
+        if url and url.startswith("postgresql"):
+            return url
+    except Exception:
+        pass
+    return None
+
+
+def get_conn():
+    """
+    Επιστρέφει σύνδεση βάσης δεδομένων.
+    • Αν υπάρχει [database] url στα Streamlit Secrets → PostgreSQL (Supabase)
+    • Αλλιώς → SQLite τοπικά
+    """
+    pg_url = _get_pg_url()
+    if pg_url:
+        import psycopg2
+        conn = psycopg2.connect(pg_url)
+        conn.autocommit = False
+        return conn
+    else:
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        conn.execute("PRAGMA foreign_keys = ON")
+        return conn
+
+
+def _is_pg(conn) -> bool:
+    """True αν η σύνδεση είναι PostgreSQL."""
+    try:
+        import psycopg2
+        return isinstance(conn, psycopg2.extensions.connection)
+    except ImportError:
+        return False
+
+
+def _adapt_sql(sql: str, conn) -> str:
+    """Μετατρέπει SQLite DDL → PostgreSQL DDL αν χρειάζεται."""
+    if _is_pg(conn):
+        sql = sql.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
+        sql = sql.replace("TEXT DEFAULT ''", "TEXT DEFAULT ''")
+    return sql
 
 
 def init_db():
-    """Δημιουργία όλων των πινάκων (idempotent)."""
+    """Δημιουργία όλων των πινάκων (idempotent). Λειτουργεί με SQLite και PostgreSQL."""
     conn = get_conn()
     c = conn.cursor()
+    pg = _is_pg(conn)
+
+    def exe(sql):
+        c.execute(_adapt_sql(sql, conn))
 
     # ── 1. ΜΕΛΗ — Μητρώο Στοάς (Άρθρο 36§5) ─────────────────────────────
-    c.execute("""
+    exe("""
     CREATE TABLE IF NOT EXISTS μέλη (
         id                  INTEGER PRIMARY KEY AUTOINCREMENT,
         επώνυμο             TEXT NOT NULL,
@@ -68,7 +122,7 @@ def init_db():
     )""")
 
     # ── 2. ΣΥΝΕΔΡΙΑΣΕΙΣ — Τρία Βιβλία Πρακτικών (Άρθρο 36§2) ────────────
-    c.execute("""
+    exe("""
     CREATE TABLE IF NOT EXISTS συνεδριάσεις (
         id                  INTEGER PRIMARY KEY AUTOINCREMENT,
         ημερομηνία          TEXT NOT NULL,
@@ -86,7 +140,7 @@ def init_db():
     )""")
 
     # ── 3. ΠΑΡΟΥΣΙΕΣ — Βιβλίο Παρουσιών (Άρθρο 36§10, 40) ───────────────
-    c.execute("""
+    exe("""
     CREATE TABLE IF NOT EXISTS παρουσίες (
         id                  INTEGER PRIMARY KEY AUTOINCREMENT,
         συνεδρίαση_id       INTEGER NOT NULL REFERENCES συνεδριάσεις(id) ON DELETE CASCADE,
@@ -99,7 +153,7 @@ def init_db():
     )""")
 
     # ── 4. ΠΡΩΤΟΚΟΛΛΟ — Εισερχόμενα/Εξερχόμενα (Άρθρο 37) ──────────────
-    c.execute("""
+    exe("""
     CREATE TABLE IF NOT EXISTS πρωτόκολλο (
         id                  INTEGER PRIMARY KEY AUTOINCREMENT,
         αρ_πρωτ             TEXT NOT NULL,
@@ -117,7 +171,7 @@ def init_db():
     )""")
 
     # ── 5. ΕΝΤΟΛΕΣ ΠΛΗΡΩΜΗΣ — Γενικό & Ελεονομείο (Άρθρο 36§6,7) ───────
-    c.execute("""
+    exe("""
     CREATE TABLE IF NOT EXISTS εντάλματα (
         id                  INTEGER PRIMARY KEY AUTOINCREMENT,
         αρ_εντάλματος       TEXT NOT NULL,
@@ -134,7 +188,7 @@ def init_db():
     )""")
 
     # ── 6. ΜΕΤΑΒΟΛΕΣ ΜΗΤΡΩΟΥ (Άρθρο 36§5, 38) ───────────────────────────
-    c.execute("""
+    exe("""
     CREATE TABLE IF NOT EXISTS μεταβολές (
         id                  INTEGER PRIMARY KEY AUTOINCREMENT,
         μέλος_id            INTEGER NOT NULL REFERENCES μέλη(id),
@@ -148,7 +202,7 @@ def init_db():
     )""")
 
     # ── 7. ΔΙΑΒΕΒΑΙΩΣΕΙΣ ΑΞΙΩΜΑΤΙΚΩΝ (Άρθρο 36§3) ───────────────────────
-    c.execute("""
+    exe("""
     CREATE TABLE IF NOT EXISTS διαβεβαιώσεις_αξιωματικών (
         id                  INTEGER PRIMARY KEY AUTOINCREMENT,
         μέλος_id            INTEGER NOT NULL REFERENCES μέλη(id),
@@ -161,7 +215,7 @@ def init_db():
     )""")
 
     # ── 8. ΔΙΑΒΕΒΑΙΩΣΕΙΣ ΜΥΟΥΜΕΝΩΝ (Άρθρο 36§4) ─────────────────────────
-    c.execute("""
+    exe("""
     CREATE TABLE IF NOT EXISTS διαβεβαιώσεις_μυουμένων (
         id                  INTEGER PRIMARY KEY AUTOINCREMENT,
         μέλος_id            INTEGER NOT NULL REFERENCES μέλη(id),
@@ -172,7 +226,7 @@ def init_db():
     )""")
 
     # ── 9. ΑΠΟΡΡΙΦΘΕΝΤΕΣ (Άρθρο 36§9) ───────────────────────────────────
-    c.execute("""
+    exe("""
     CREATE TABLE IF NOT EXISTS απορριφθέντες (
         id                  INTEGER PRIMARY KEY AUTOINCREMENT,
         επώνυμο             TEXT NOT NULL,
@@ -185,7 +239,7 @@ def init_db():
     )""")
 
     # ── 10. ΧΡΥΣΗ ΒΙΒΛΟΣ (Άρθρο 36§1) ───────────────────────────────────
-    c.execute("""
+    exe("""
     CREATE TABLE IF NOT EXISTS χρυσή_βίβλος (
         id                  INTEGER PRIMARY KEY AUTOINCREMENT,
         ημερομηνία          TEXT NOT NULL,
@@ -197,7 +251,7 @@ def init_db():
     )""")
 
     # ── 11. ΔΕΛΤΙΑ & ΔΙΠΛΩΜΑΤΑ (Άρθρο 41) ───────────────────────────────
-    c.execute("""
+    exe("""
     CREATE TABLE IF NOT EXISTS δελτία_διπλώματα (
         id                  INTEGER PRIMARY KEY AUTOINCREMENT,
         μέλος_id            INTEGER NOT NULL REFERENCES μέλη(id),
@@ -212,7 +266,7 @@ def init_db():
     )""")
 
     # ── 12. ΠΡΑΚΤΙΚΑ ΣΥΜΒΟΥΛΙΟΥ ΑΞΙΩΜΑΤΙΚΩΝ (Άρθρο 36§11) ───────────────
-    c.execute("""
+    exe("""
     CREATE TABLE IF NOT EXISTS πρακτικά_συμβουλίου (
         id                  INTEGER PRIMARY KEY AUTOINCREMENT,
         ημερομηνία          TEXT NOT NULL,
@@ -224,7 +278,7 @@ def init_db():
     )""")
 
     # ── 13. ΕΡΓΑΣΙΕΣ & ΥΠΕΝΘΥΜΙΣΕΙΣ ─────────────────────────────────────
-    c.execute("""
+    exe("""
     CREATE TABLE IF NOT EXISTS εργασίες (
         id                  INTEGER PRIMARY KEY AUTOINCREMENT,
         τίτλος              TEXT NOT NULL,
