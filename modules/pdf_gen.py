@@ -656,7 +656,11 @@ def generate_diploma_custom_pdf(member: Dict, text: str,
                                  sig1_title: str = "ο Μέγας Διδάσκαλος",
                                  sig1_name:  str = "Γεώργιος Μπινιάρης",
                                  sig2_title: str = "ο Μέγας Γραμματεύς",
-                                 sig2_name:  str = "Ανδρέας Αρχουζής") -> io.BytesIO:
+                                 sig2_name:  str = "Ανδρέας Αρχουζής",
+                                 hdr1: str = "Ε.Λ.Τ.Μ.Α.Τ.Σ.",
+                                 hdr2: str = "ΜΕΓΑΛΗ ΣΤΟΑ ΤΗΣ ΕΛΛΑΔΟΣ",
+                                 hdr3: str = "Ἀρχαίου Ἐλευθέρου καὶ Ἀποδεδεγμένου Τεκτονισμοῦ",
+                                 ) -> io.BytesIO:
     """
     Δίπλωμα με ελεύθερα επεξεργάσιμο κείμενο.
     Markers στο κείμενο:
@@ -731,12 +735,12 @@ def generate_diploma_custom_pdf(member: Dict, text: str,
     story = []
     story.append(Spacer(1, 0.7*cm))
 
-    # Κεφαλίδα
-    story.append(Paragraph("Ε.Λ.Τ.Μ.Α.Τ.Σ.", s["dip_hdr2"]))
+    # Κεφαλίδα (επεξεργάσιμη)
+    story.append(Paragraph(hdr1, s["dip_hdr2"]))
     story.append(Spacer(1, .4*cm))
     story.append(HRFlowable(width="80%", thickness=1.5, color=GOLD_D, hAlign="CENTER", spaceAfter=6))
-    story.append(Paragraph("ΜΕΓΑΛΗ ΣΤΟΑ ΤΗΣ ΕΛΛΑΔΟΣ", s["dip_hdr1"]))
-    story.append(Paragraph("Ἀρχαίου Ἐλευθέρου καὶ Ἀποδεδεγμένου Τεκτονισμοῦ", s["dip_hdr2"]))
+    story.append(Paragraph(hdr2, s["dip_hdr1"]))
+    story.append(Paragraph(hdr3, s["dip_hdr2"]))
     story.append(HRFlowable(width="80%", thickness=1.5, color=GOLD_D, hAlign="CENTER", spaceAfter=10))
     story.append(Spacer(1, .3*cm))
 

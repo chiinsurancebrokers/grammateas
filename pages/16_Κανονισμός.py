@@ -9,6 +9,47 @@ st.set_page_config(page_title="Κανονισμός", page_icon="📖", layout="
 st.markdown("# 📖 Κανονισμός Γραμματέα-Σφραγιδοφύλακος")
 st.caption("Γενικός Κανονισμός (ΓΚ) · Καταστατικός Χάρτης (ΚΧ) — ΜΣΤΕ 2023")
 
+# ── ΑΜΕΣΗ ΛΗΨΗ ΠΡΩΤΟΤΥΠΩΝ PDF ────────────────────────────────
+import os
+st.subheader("📥 Πρωτότυπα Έγγραφα ΜΣΤΕ")
+col_gk, col_kx = st.columns(2)
+
+docs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs")
+gk_path = os.path.join(docs_dir, "ΓΕΝΙΚΟΣ_ΚΑΝΟΝΙΣΜΟΣ_ΜΣΤΕ_10062023.pdf")
+kx_path = os.path.join(docs_dir, "ΚΑΤΑΣΤΑΤΙΚΟΣ_ΧΑΡΤΗΣ_ΜΣΤΕ_10062023.pdf")
+
+with col_gk:
+    if os.path.exists(gk_path):
+        with open(gk_path, "rb") as f:
+            st.download_button(
+                "📄 Γενικός Κανονισμός ΜΣΤΕ (ΓΚ)",
+                data=f.read(),
+                file_name="ΓΕΝΙΚΟΣ_ΚΑΝΟΝΙΣΜΟΣ_ΜΣΤΕ_2023.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                type="primary"
+            )
+        st.caption("Γενικός Κανονισμός — Έκδοση 10/06/2023 · 126 σελίδες")
+    else:
+        st.warning("Αρχείο ΓΚ δεν βρέθηκε.")
+
+with col_kx:
+    if os.path.exists(kx_path):
+        with open(kx_path, "rb") as f:
+            st.download_button(
+                "📄 Καταστατικός Χάρτης ΜΣΤΕ (ΚΧ)",
+                data=f.read(),
+                file_name="ΚΑΤΑΣΤΑΤΙΚΟΣ_ΧΑΡΤΗΣ_ΜΣΤΕ_2023.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                type="primary"
+            )
+        st.caption("Καταστατικός Χάρτης — Έκδοση 10/06/2023 · 87 σελίδες")
+    else:
+        st.warning("Αρχείο ΚΧ δεν βρέθηκε.")
+
+st.markdown("---")
+
 # ── SEARCH ────────────────────────────────────────────────────
 col_s, col_f = st.columns([3, 1])
 with col_s:
