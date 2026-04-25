@@ -40,18 +40,72 @@ def get_api_key():
 
 
 def compress_to_mp3(audio_bytes: bytes, ext: str):
+    """
+    Προσπαθεί MP3 128kbps μέσω pydub+ffmpeg.
+    Fallback: αν δεν υπάρχει ffmpeg, μειώνει WAV σε mono 16kHz (built-in Python).
+    """
+    # ── Δοκιμή 1: pydub + ffmpeg (καλύτερο αποτέλεσμα) ──────
     try:
         from pydub import AudioSegment
         buf_in = io.BytesIO(audio_bytes)
-        seg = AudioSegment.from_file(buf_in, format=ext if ext != "m4a" else "mp4")
+        fmt = ext if ext not in ("m4a","aac") else "mp4"
+        seg = AudioSegment.from_file(buf_in, format=fmt)
         buf_out = io.BytesIO()
         seg.export(buf_out, format="mp3", bitrate="128k")
         buf_out.seek(0)
-        return buf_out.read(), None
+        return buf_out.read(), None, "mp3"
     except ImportError:
-        return None, "❌ Απαιτείται `pydub` + `ffmpeg`. Δείτε Οδηγίες."
+        pass  # pydub δεν υπάρχει → fallback
+    except Exception:
+        pass  # ffmpeg δεν υπάρχει → fallback
+
+    # ── Fallback: WAV μόνο — mono 16kHz μέσω built-in Python ─
+    if ext != "wav":
+        return None, (
+            "❌ Το ffmpeg δεν έχει εγκατασταθεί ακόμα στο Streamlit Cloud.\n"
+            "👉 Κάντε **Delete app → Redeploy** από το Streamlit Cloud dashboard "
+            "για να γίνει clean build με το ffmpeg.\n"
+            "Εναλλακτικά, ανεβάστε το αρχείο ήδη σε MP3 μορφή."
+        ), None
+
+    # WAV fallback: wave + audioop (built-in, δεν χρειάζεται ffmpeg)
+    try:
+        import wave, audioop, struct
+        with wave.open(io.BytesIO(audio_bytes)) as wf:
+            n_ch      = wf.getnchannels()
+            orig_rate = wf.getframerate()
+            sampwidth = wf.getsampwidth()
+            frames    = wf.readframes(wf.getnframes())
+
+        # Mono (αν stereo)
+        if n_ch == 2:
+            frames = audioop.tomono(frames, sampwidth, 0.5, 0.5)
+
+        # Resample → 16000 Hz
+        target_rate = 16000
+        if orig_rate != target_rate:
+            frames, _ = audioop.ratecv(frames, sampwidth, 1, orig_rate, target_rate, None)
+
+        # Γράψε νέο WAV
+        buf_out = io.BytesIO()
+        with wave.open(buf_out, "wb") as wo:
+            wo.setnchannels(1)
+            wo.setsampwidth(sampwidth)
+            wo.setframerate(target_rate)
+            wo.writeframes(frames)
+        buf_out.seek(0)
+        result = buf_out.read()
+
+        orig_mb = len(audio_bytes) / (1024*1024)
+        new_mb  = len(result) / (1024*1024)
+        return result, (
+            f"⚠️ ffmpeg δεν βρέθηκε — χρησιμοποιήθηκε Python fallback.\n"
+            f"WAV: {orig_mb:.1f}MB → mono 16kHz WAV: {new_mb:.1f}MB\n"
+            f"Για MP3 (μικρότερο), κάντε **Delete app → Redeploy** στο Streamlit Cloud."
+        ), "wav"
+
     except Exception as e:
-        return None, f"❌ Σφάλμα συμπίεσης: {e}"
+        return None, f"❌ Σφάλμα fallback συμπίεσης: {e}", None
 
 
 def call_claude_audio(audio_bytes: bytes, ext: str, context: str):
@@ -376,15 +430,18 @@ with tab_main:
         with col_btn:
             if needs_compress and size_mb <= MAX_MB_RAW:
                 if st.button("🔄 Συμπίεση σε MP3", use_container_width=True, type="secondary"):
-                    with st.spinner(f"Συμπίεση {size_mb:.1f}MB → MP3…"):
-                        comp, err = compress_to_mp3(raw_bytes, ext)
-                    if err:
-                        st.error(err)
+                    with st.spinner(f"Συμπίεση {size_mb:.1f}MB…"):
+                        comp, msg, out_ext = compress_to_mp3(raw_bytes, ext)
+                    if comp is None:
+                        st.error(msg)
                     else:
                         comp_mb = len(comp)/(1024*1024)
-                        st.success(f"✅ {size_mb:.1f}MB → {comp_mb:.1f}MB")
+                        if msg:  # warning (fallback mode)
+                            st.warning(msg)
+                        else:
+                            st.success(f"✅ {size_mb:.1f}MB → {comp_mb:.1f}MB MP3")
                         st.session_state["ready_audio"] = comp
-                        st.session_state["ready_ext"]   = "mp3"
+                        st.session_state["ready_ext"]   = out_ext
                         st.rerun()
 
         # Κουμπί λήψης MP3 αν έγινε συμπίεση
