@@ -344,16 +344,16 @@ def create_invitation(
     f_top = font(40, bold=True)
     f_header = font(25)
     f_lodge = font(29, bold=True)
-    f_title = font(54, bold=True)
-    f_body = font(26)
-    f_body_b = font(26, bold=True)
-    f_section = font(26, bold=True)
-    f_agenda = font(23, bold=True)
-    f_small = font(21)
-    f_small_b = font(21, bold=True)
-    f_sig = font(22)
-    f_sig_name = font(18, bold=True)
-    f_next = font(21)
+    f_title = font(48, bold=True)
+    f_body = font(24)
+    f_body_b = font(24, bold=True)
+    f_section = font(24, bold=True)
+    f_agenda = font(21, bold=True)
+    f_small = font(19)
+    f_small_b = font(19, bold=True)
+    f_sig = font(20)
+    f_sig_name = font(16, bold=True)
+    f_next = font(18)
 
     # 1. Header
     y = 126
@@ -377,7 +377,7 @@ def create_invitation(
     photo_x = INNER_X - 5
     photo_y = y + 4
     photo_w = PAGE_W - photo_x * 2
-    photo_h = 340
+    photo_h = 300
 
     raw_photo = photo_bytes or load_asset("acropolis-photo.jpg")
     if raw_photo:
@@ -390,47 +390,47 @@ def create_invitation(
         draw.rounded_rectangle([photo_x, photo_y, photo_x + photo_w, photo_y + photo_h], radius=10, fill=(220, 220, 220, 255))
 
     draw = ImageDraw.Draw(img)
-    y = photo_y + photo_h + 28
+    y = photo_y + photo_h + 20
 
     # 3. Title
-    y = center(draw, y, "ΠΡΟΣΚΛΗΣΗ ΣΕ ΕΡΓΑΣΙΕΣ", f_title, NAVY, lsp=6)
-    ornament(draw, y + 6, x1=400, x2=840)
-    y += 32
+    y = center(draw, y, "ΠΡΟΣΚΛΗΣΗ ΣΕ ΕΡΓΑΣΙΕΣ", f_title, NAVY, lsp=4)
+    ornament(draw, y + 4, x1=420, x2=820)
+    y += 26
 
     # 4. Meeting details
     y = center(draw, y, f"Την {meeting_date} και ώρα {meeting_time},", f_body_b, NAVY, max_w=TEXT_W, lsp=7)
     y = center(draw, y, "θα πραγματοποιηθούν οι Εργασίες της Σεπτής Στοάς μας", f_body, NAVY, max_w=TEXT_W, lsp=7)
     y = center(draw, y, f"εις Βαθμόν {degree},", f_body, NAVY, max_w=TEXT_W, lsp=12)
-    y = center(draw, y, venue, f_body, NAVY, max_w=TEXT_W, lsp=14)
+    y = center(draw, y, venue, f_body, NAVY, max_w=TEXT_W, lsp=10)
 
-    rule(draw, y + 6, x1=310, x2=930)
-    y += 22
+    rule(draw, y + 4, x1=330, x2=910)
+    y += 18
 
     # 5. Agenda
-    y = center(draw, y, "ΗΜΕΡΗΣΙΑ ΔΙΑΤΑΞΙΣ", f_section, NAVY, lsp=20)
+    y = center(draw, y, "ΗΜΕΡΗΣΙΑ ΔΙΑΤΑΞΙΣ", f_section, NAVY, lsp=14)
     bullet_x = INNER_X + 70
     text_x = bullet_x + 48
 
     for item in agenda_items:
-        draw_sq_compass(draw, bullet_x, y + 12, 13, GOLD, show_g=False)
-        y = left(draw, text_x, y, item.upper(), f_agenda, NAVY, max_w=TEXT_W - 80, lsp=9)
-        y += 2
+        draw_sq_compass(draw, bullet_x, y + 10, 11, GOLD, show_g=False)
+        y = left(draw, text_x, y, item.upper(), f_agenda, NAVY, max_w=TEXT_W - 80, lsp=5)
+        y += 1
 
-    y += 8
+    y += 4
 
     # 6. Speaker / Topic
     if speaker.strip():
-        y = center(draw, y, f"Ομιλητής: {speaker.strip()}", f_small, NAVY, max_w=TEXT_W, lsp=8)
+        y = center(draw, y, f"Ομιλητής: {speaker.strip()}", f_small, NAVY, max_w=TEXT_W, lsp=5)
     else:
-        y = center(draw, y, "Ομιλητής: ________________________________", f_small, NAVY, lsp=8)
+        y = center(draw, y, "Ομιλητής: ________________________________", f_small, NAVY, lsp=5)
 
     if topic.strip():
-        y = center(draw, y, f"Θέμα: «{topic.strip()}»", f_small, NAVY, max_w=TEXT_W, lsp=12)
+        y = center(draw, y, f"Θέμα: «{topic.strip()}»", f_small, NAVY, max_w=TEXT_W, lsp=8)
     else:
-        y = center(draw, y, "Θέμα: «__________________________________»", f_small, NAVY, lsp=12)
+        y = center(draw, y, "Θέμα: «__________________________________»", f_small, NAVY, lsp=8)
 
-    ornament(draw, y + 5, x1=470, x2=770)
-    y += 26
+    ornament(draw, y + 3, x1=480, x2=760)
+    y += 20
 
     # 7. Closing
     para = (
@@ -438,10 +438,10 @@ def create_invitation(
         "ιδιαίτερη χαρά και τιμή για το Πλήρωμα του Εργαστηρίου μας και τον "
         "Αδελφό Σεβάσμιο ιδιαιτέρως."
     )
-    y = center(draw, y, para, f_small, NAVY, max_w=TEXT_W, lsp=6)
-    y += 4
-    y = center(draw, y, "Μετά το πέρας των Εργασιών θα ακολουθήσει Ποτήριον Αγάπης.", f_small, NAVY, max_w=TEXT_W, lsp=10)
-    y = center(draw, y, "Με τον τριπλό αδελφικό ασπασμό,", f_small, NAVY, lsp=18)
+    y = center(draw, y, para, f_small, NAVY, max_w=TEXT_W, lsp=4)
+    y += 2
+    y = center(draw, y, "Μετά το πέρας των Εργασιών θα ακολουθήσει Ποτήριον Αγάπης.", f_small, NAVY, max_w=TEXT_W, lsp=6)
+    y = center(draw, y, "Με τον τριπλό αδελφικό ασπασμό,", f_small, NAVY, lsp=12)
 
     # 8. Signatures — central symbol between them
     sig_y = y + 4
@@ -460,9 +460,9 @@ def create_invitation(
         center_at(draw, sig_rx, line_y + 8, secretary.strip().upper(), f_sig_name, NAVY)
 
     # Σφραγίδα / κεντρικό σύμβολο εδώ, όχι επάνω
-    symbol_box_w, symbol_box_h = 140, 105
+    symbol_box_w, symbol_box_h = 110, 86
     symbol_x = (PAGE_W - symbol_box_w) // 2
-    symbol_y = sig_y + 20
+    symbol_y = sig_y + 18
     if symbol_center_bytes:
         paste_asset(img, symbol_center_bytes, symbol_x, symbol_y, symbol_box_w, symbol_box_h)
     else:
@@ -475,27 +475,29 @@ def create_invitation(
     # 9. Next Sessions box
     box_x1 = INNER_X - 10
     box_x2 = PAGE_W - INNER_X + 10
-    box_y1 = max(y + 22, 1582)
-    box_h = 58 + len(next_sessions[:4]) * 34 + 22
-    box_y2 = min(box_y1 + box_h, PAGE_H - 128)
+    # Σταθερή θέση ώστε οι επόμενες συνεδρίες να μένουν εντός του εσωτερικού πλαισίου.
+    box_y1 = min(max(y + 16, 1538), PAGE_H - 265)
+    box_h = 52 + len(next_sessions[:4]) * 30 + 18
+    box_y2 = min(box_y1 + box_h, PAGE_H - 150)
 
     draw.rounded_rectangle([box_x1, box_y1, box_x2, box_y2], radius=10, outline=BLACK, width=2, fill=WHITE)
     draw.rounded_rectangle([box_x1 + 4, box_y1 + 4, box_x2 - 4, box_y2 - 4], radius=8, outline=NAVY, width=1)
 
     header_y = box_y1 + 14
-    center_at(draw, PAGE_W // 2, header_y, "ΕΠΟΜΕΝΕΣ ΣΥΝΕΔΡΙΕΣ", font(24, bold=True), NAVY)
-    rule(draw, header_y + 36, x1=box_x1 + 105, x2=box_x2 - 105)
+    center_at(draw, PAGE_W // 2, header_y, "ΕΠΟΜΕΝΕΣ ΣΥΝΕΔΡΙΕΣ", font(22, bold=True), NAVY)
+    rule(draw, header_y + 32, x1=box_x1 + 115, x2=box_x2 - 115)
 
-    row_y = header_y + 48
+    row_y = header_y + 42
     for dt, deg in next_sessions[:4]:
         cal_x = box_x1 + 105
-        draw.rectangle([cal_x, row_y + 3, cal_x + 20, row_y + 25], outline=NAVY, width=2)
-        draw.line([(cal_x, row_y + 10), (cal_x + 20, row_y + 10)], fill=NAVY, width=2)
-        draw.text((box_x1 + 140, row_y), dt, font=f_next, fill=NAVY)
-        draw.text((box_x1 + 520, row_y), f"Βαθμός: {deg}", font=f_next, fill=NAVY)
-        row_y += 34
+        draw.rectangle([cal_x, row_y + 2, cal_x + 18, row_y + 22], outline=NAVY, width=2)
+        draw.line([(cal_x, row_y + 8), (cal_x + 18, row_y + 8)], fill=NAVY, width=2)
+        draw.text((box_x1 + 138, row_y), dt, font=f_next, fill=NAVY)
+        draw.text((box_x1 + 515, row_y), f"Βαθμός: {deg}", font=f_next, fill=NAVY)
+        row_y += 30
 
-    ornament(draw, box_y2 + 26, x1=470, x2=770)
+    if box_y2 + 24 < PAGE_H - 118:
+        ornament(draw, box_y2 + 22, x1=480, x2=760)
 
     # Export
     out = Image.new("RGB", (PAGE_W, PAGE_H), WHITE)
