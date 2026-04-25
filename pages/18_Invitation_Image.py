@@ -273,46 +273,80 @@ def draw_diamond_border(img: Image.Image, corner_bytes: Optional[bytes] = None) 
 # ΦΩΤΟΓΡΑΦΙΑ ΑΚΡΟΠΟΛΗΣ
 # ══════════════════════════════════════════════════════════════
 def process_acropolis(photo_bytes: bytes, box_w: int, box_h: int) -> Image.Image:
+    """
+    Φορτώνει τη φωτογραφία Ακρόπολης, αφαιρεί την κάτω λωρίδα με γράμματα,
+    την κάνει καθαρή B&W, αυξάνει contrast/sharpness και εφαρμόζει πολύ διακριτικό fade.
+    """
+    from PIL import ImageEnhance
+
     photo = Image.open(io.BytesIO(photo_bytes)).convert("L")
     pw, ph = photo.size
 
-    # Αφαίρεση κάτω λωρίδας με γράμματα/υπογραφή
-    photo = photo.crop((0, 0, pw, int(ph * 0.84)))
+    # Αφαίρεση κάτω λωρίδας με γράμματα/υπογραφή.
+    # Κόβουμε λίγο πιο επιθετικά για να μη μένουν traces από caption.
+    photo = photo.crop((0, 0, pw, int(ph * 0.81)))
     pw, ph = photo.size
 
     target_ratio = box_w / box_h
     src_ratio = pw / ph
 
+    # Cover crop με στόχο να κρατήσει Παρθενώνα + Λυκαβηττό.
     if src_ratio > target_ratio:
         new_w = int(ph * target_ratio)
-        left = (pw - new_w) // 2
+        left = max(0, (pw - new_w) // 2)
         photo = photo.crop((left, 0, left + new_w, ph))
     else:
         new_h = int(pw / target_ratio)
-        top = max(0, int((ph - new_h) * 0.15))
+        top = max(0, int((ph - new_h) * 0.10))
         photo = photo.crop((0, top, pw, top + new_h))
 
     photo = photo.resize((box_w, box_h), Image.LANCZOS)
-    photo = ImageOps.autocontrast(photo)
+    photo = ImageOps.autocontrast(photo, cutoff=1)
+    photo = ImageEnhance.Contrast(photo).enhance(1.18)
+    photo = ImageEnhance.Sharpness(photo).enhance(1.25)
+
     rgba = photo.convert("RGBA")
 
-    # soft fade edges
+    # Μαλακές άκρες, όχι υπερβολικό fade ώστε να μένει καθαρή.
     mask = Image.new("L", (box_w, box_h), 0)
     md = ImageDraw.Draw(mask)
-    md.rounded_rectangle([0, 0, box_w, box_h], radius=24, fill=255)
-    mask = mask.filter(ImageFilter.GaussianBlur(13))
+    md.rounded_rectangle([0, 0, box_w, box_h], radius=18, fill=255)
+    mask = mask.filter(ImageFilter.GaussianBlur(8))
 
-    # fade bottom
+    # Πολύ διακριτικό κάτω fade για να δένει με τον τίτλο.
     alpha = mask.copy()
-    fade_start = int(box_h * 0.72)
+    fade_start = int(box_h * 0.84)
     for yy in range(fade_start, box_h):
         t = (yy - fade_start) / max(1, box_h - fade_start)
-        val = int(255 * (1 - t ** 0.85))
+        val = int(255 * (1 - 0.35 * t))
         for xx in range(box_w):
             alpha.putpixel((xx, yy), min(alpha.getpixel((xx, yy)), val))
 
     rgba.putalpha(alpha)
     return rgba
+
+
+def draw_photo_frame(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int) -> None:
+    """Κομψό εσωτερικό πλαίσιο γύρω από τη φωτογραφία, όπως σε επίσημη πρόσκληση."""
+    pad = 10
+    outer = [x - pad, y - pad, x + w + pad, y + h + pad]
+    inner = [x - 3, y - 3, x + w + 3, y + h + 3]
+
+    # λευκό mount / passe-partout
+    draw.rounded_rectangle(outer, radius=14, fill=WHITE, outline=NAVY, width=2)
+    draw.rounded_rectangle(inner, radius=10, outline=BLACK, width=2)
+
+    # μικρές γωνιακές λεπτομέρειες
+    c = 26
+    for sx, sy in [(outer[0], outer[1]), (outer[2], outer[1]), (outer[0], outer[3]), (outer[2], outer[3])]:
+        if sx == outer[0] and sy == outer[1]:
+            draw.line([(sx, sy + c), (sx, sy), (sx + c, sy)], fill=NAVY, width=2)
+        elif sx == outer[2] and sy == outer[1]:
+            draw.line([(sx - c, sy), (sx, sy), (sx, sy + c)], fill=NAVY, width=2)
+        elif sx == outer[0] and sy == outer[3]:
+            draw.line([(sx, sy - c), (sx, sy), (sx + c, sy)], fill=NAVY, width=2)
+        else:
+            draw.line([(sx - c, sy), (sx, sy), (sx, sy - c)], fill=NAVY, width=2)
 
 # ══════════════════════════════════════════════════════════════
 # ΚΥΡΙΑ ΓΕΝΝΗΤΡΙΑ
@@ -374,12 +408,15 @@ def create_invitation(
         draw_sq_compass(draw, PAGE_W - INNER_X - 25, 205, 46, NAVY)
 
     # 2. Photo
-    photo_x = INNER_X - 5
-    photo_y = y + 4
+    photo_x = INNER_X - 30
+    photo_y = y + 8
     photo_w = PAGE_W - photo_x * 2
-    photo_h = 300
+    photo_h = 360
 
     raw_photo = photo_bytes or load_asset("acropolis-photo.jpg")
+    # Κομψό πλαίσιο φωτογραφίας πρώτα, μετά η εικόνα από πάνω.
+    draw_photo_frame(draw, photo_x, photo_y, photo_w, photo_h)
+
     if raw_photo:
         try:
             ph_img = process_acropolis(raw_photo, photo_w, photo_h)
@@ -390,7 +427,7 @@ def create_invitation(
         draw.rounded_rectangle([photo_x, photo_y, photo_x + photo_w, photo_y + photo_h], radius=10, fill=(220, 220, 220, 255))
 
     draw = ImageDraw.Draw(img)
-    y = photo_y + photo_h + 20
+    y = photo_y + photo_h + 30
 
     # 3. Title
     y = center(draw, y, "ΠΡΟΣΚΛΗΣΗ ΣΕ ΕΡΓΑΣΙΕΣ", f_title, NAVY, lsp=4)
@@ -460,23 +497,23 @@ def create_invitation(
         center_at(draw, sig_rx, line_y + 8, secretary.strip().upper(), f_sig_name, NAVY)
 
     # Σφραγίδα / κεντρικό σύμβολο εδώ, όχι επάνω
-    symbol_box_w, symbol_box_h = 110, 86
+    symbol_box_w, symbol_box_h = 155, 125
     symbol_x = (PAGE_W - symbol_box_w) // 2
-    symbol_y = sig_y + 18
+    symbol_y = sig_y + 6
     if symbol_center_bytes:
         paste_asset(img, symbol_center_bytes, symbol_x, symbol_y, symbol_box_w, symbol_box_h)
     else:
-        draw_wreath_symbol(draw, PAGE_W // 2, symbol_y + 55, 52, NAVY)
+        draw_wreath_symbol(draw, PAGE_W // 2, symbol_y + 64, 68, NAVY)
 
-    y = line_y + 50
+    y = line_y + 64
     if master.strip() or secretary.strip():
-        y += 20
+        y += 18
 
     # 9. Next Sessions box
     box_x1 = INNER_X - 10
     box_x2 = PAGE_W - INNER_X + 10
     # Σταθερή θέση ώστε οι επόμενες συνεδρίες να μένουν εντός του εσωτερικού πλαισίου.
-    box_y1 = min(max(y + 16, 1538), PAGE_H - 265)
+    box_y1 = min(max(y + 18, 1548), PAGE_H - 265)
     box_h = 52 + len(next_sessions[:4]) * 30 + 18
     box_y2 = min(box_y1 + box_h, PAGE_H - 150)
 
@@ -613,4 +650,5 @@ with st.expander("ℹ️ Οδηγίες assets"):
 
     Το `symbol_center.png` είναι το βασικό σύμβολο/σφραγίδα που θα μπει ανάμεσα στον Σεβάσμιο και τον Γραμματέα.
     """)
+
 
