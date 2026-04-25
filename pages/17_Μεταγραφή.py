@@ -109,35 +109,106 @@ def compress_to_mp3(audio_bytes: bytes, ext: str):
     ), None
 
 
-def call_claude_audio(audio_bytes: bytes, ext: str, context: str):
-    api_key = get_api_key()
-    if not api_key:
-        return None, "❌ Δεν βρέθηκε ANTHROPIC_API_KEY στα Streamlit Secrets."
-    try:
-        import anthropic
-    except ImportError:
-        return None, "❌ Προσθέστε 'anthropic' στο requirements.txt"
+# ── Σταθερά: max bytes ανά API call (4MB safe limit) ──────────
+MAX_CHUNK_BYTES = 4 * 1024 * 1024
 
+
+def _split_into_chunks(audio_bytes: bytes, ext: str) -> list[bytes]:
+    """
+    Σπάει το ηχητικό σε chunks ~4MB έκαστο με PyAV.
+    Κάθε chunk: mono MP3 64kbps 16kHz ≈ ~3 λεπτά.
+    """
+    try:
+        import av
+        CHUNK_SEC = 180  # 3 λεπτά ανά chunk
+        in_buf = io.BytesIO(audio_bytes)
+        chunks = []
+
+        with av.open(in_buf) as container:
+            audio_stream = next((s for s in container.streams if s.type == "audio"), None)
+            if audio_stream is None:
+                return [audio_bytes]  # δεν μπόρεσε να βρει audio stream
+
+            total_us = container.duration or 0
+            total_sec = total_us / 1_000_000 if total_us else 7200
+            n_chunks = max(1, int(total_sec / CHUNK_SEC) + 1)
+
+            for i in range(n_chunks):
+                start_us = int(i * CHUNK_SEC * 1_000_000)
+                end_sec  = (i + 1) * CHUNK_SEC
+                out_buf  = io.BytesIO()
+
+                try:
+                    container.seek(start_us)
+                    with av.open(out_buf, mode="w", format="mp3") as out:
+                        ostream = out.add_stream("mp3", rate=16000)
+                        ostream.bit_rate = 64000
+                        frames_written = 0
+                        for frame in container.decode(audio=0):
+                            if frame.pts is None:
+                                continue
+                            t = float(frame.pts * audio_stream.time_base)
+                            if t >= end_sec:
+                                break
+                            frame.pts = None
+                            for pkt in ostream.encode(frame):
+                                out.mux(pkt)
+                            frames_written += 1
+                        for pkt in ostream.encode():
+                            out.mux(pkt)
+                    out_buf.seek(0)
+                    data = out_buf.read()
+                    if len(data) > 5000:  # αγνόησε κενά chunks
+                        chunks.append(data)
+                except Exception:
+                    break
+
+        return chunks if chunks else [audio_bytes]
+    except ImportError:
+        return [audio_bytes]  # χωρίς av, στείλε ολόκληρο (θα αποτύχει αν μεγάλο)
+
+
+def _transcribe_chunk(client, chunk: bytes, chunk_idx: int, total: int) -> str:
+    """Μεταγράφει ένα μόνο chunk — επιστρέφει plain text."""
+    b64 = base64.standard_b64encode(chunk).decode()
+    try:
+        msg = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4000,
+            messages=[{"role":"user","content":[
+                {"type":"text","text":(
+                    f"Αυτό είναι το τμήμα {chunk_idx+1}/{total} ηχογράφησης Τεκτονικής Συνεδρίασης. "
+                    "Κάνε αναλυτική μεταγραφή λέξη-προς-λέξη στα ελληνικά. "
+                    "Επέστρεψε ΜΟΝΟ το κείμενο μεταγραφής, χωρίς επεξηγήσεις."
+                )},
+                {"type":"audio","source":{"type":"base64","media_type":"audio/mpeg","data":b64}}
+            ]}]
+        )
+        return msg.content[0].text if msg.content else ""
+    except Exception as e:
+        return f"[Σφάλμα chunk {chunk_idx+1}: {e}]"
+
+
+def _format_into_praktiko(client, transcript: str, context: str) -> tuple:
+    """Παίρνει συνδυασμένη μεταγραφή → επίσημα Πρακτικά ΜΣΤΕ σε JSON."""
     system = """Είσαι Γραμματεύς-Σφραγιδοφύλαξ της Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ υπ' αρ. 84 (ΜΣΤΕ).
-Σου δίνεται ηχογράφηση Τεκτονικής Συνεδρίασης. Κάνε μεταγραφή και σύνταξε επίσημα Πρακτικά.
+Σου δίνεται μεταγραφή Τεκτονικής Συνεδρίασης. Σύνταξε επίσημα Πρακτικά.
 
 Υποχρεωτική δομή κειμένου:
-• Έναρξη («Σήμερον [ημέρα] [ημερομηνία], εις [τόπο], και υπό την Σφύραν του Σεβ∴ Διδ∴ ... ανοίγουν οι Εργασίες εις Βαθμόν [βαθμός].»)
-• Παρόντες ([αριθμός ολογράφως] ([αριθμός]) Αδδ∴)
+• Έναρξη («Σήμερον [ημέρα] [ημερομηνία], εις [τόπο], υπό την Σφύραν του Σεβ∴ Διδ∴ ... ανοίγουν αι Εργασίαι εις Βαθμόν [βαθμός].»)
+• Παρόντες ([αριθμός ολογράφως] ([αριθμός]) Αδδ∴, ενεργά μέλη)
 • Θέσεις αξιωματικών
 • Αλληλογραφία (ο Αδ∴ Ρήτ∴ ανέγνωσεν...)
 • Επικύρωση προηγουμένων πρακτικών
 • Εργασίες / Ομιλίες / Αποφάσεις (αναλυτικά)
-• Κεφάλαιον Αγαθοεργίας (Κορμός, Σάκ∴ Προτάσεων)
+• Κεφάλαιον Αγαθοεργίας
 • Κλείσιμο
 
-Χρησιμοποίησε πάντα: Σεβ∴ Διδ∴, Αδ∴, Σ∴ Στ∴, Βαθμ∴ Μαθ∴/Ετ∴/Διδ∴, Γραμμ∴, Ρήτ∴ κλπ.
-Γράψε σε αρχαιοπρεπές επίσημο τεκτονικό ύφος.
-Χώριζε παραγράφους με κενή γραμμή.
+Χρησιμοποίησε: Σεβ∴ Διδ∴, Αδ∴, Σ∴ Στ∴, Βαθμ∴ Μαθ∴/Ετ∴/Διδ∴, Γραμμ∴, Ρήτ∴ κλπ.
+Αρχαιοπρεπές επίσημο τεκτονικό ύφος. Παράγραφοι χωρισμένες με κενή γραμμή.
 
 Επέστρεψε ΜΟΝΟ JSON (χωρίς backticks):
 {
-  "μεταγραφή_λέξη_προς_λέξη": "...",
   "ημερομηνία": "DD/MM/YYYY",
   "ημέρα": "Τρίτην",
   "βαθμός_γενική": "Μαθητού",
@@ -153,29 +224,99 @@ def call_claude_audio(audio_bytes: bytes, ext: str, context: str):
   "γραμματεύς": "Όνομα Επώνυμο",
   "ρήτωρ": "Όνομα Επώνυμο"
 }"""
-
-    media_type = MIME_MAP.get(ext, "audio/mpeg")
-    b64 = base64.standard_b64encode(audio_bytes).decode()
-
     try:
-        client = anthropic.Anthropic(api_key=api_key)
         msg = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=8000,
             system=system,
-            messages=[{"role":"user","content":[
-                {"type":"text","text":f"Πλαίσιο: {context or '-'}. Κάνε μεταγραφή και σύνταξε πρακτικά ΜΣΤΕ."},
-                {"type":"audio","source":{"type":"base64","media_type":media_type,"data":b64}}
-            ]}]
+            messages=[{"role":"user","content":
+                f"Πλαίσιο: {context or '-'}\n\nΜεταγραφή:\n{transcript}"
+            }]
         )
         raw   = msg.content[0].text if msg.content else ""
         clean = re.sub(r"^```[a-z]*\n?","",raw.strip())
         clean = re.sub(r"\n?```$","",clean.strip())
-        return json.loads(clean), None
+        result = json.loads(clean)
+        result["μεταγραφή_λέξη_προς_λέξη"] = transcript
+        return result, None
     except json.JSONDecodeError:
-        return {"μεταγραφή_λέξη_προς_λέξη":raw, "κείμενο_πρακτικών":raw}, None
+        return {"μεταγραφή_λέξη_προς_λέξη":transcript, "κείμενο_πρακτικών":raw}, None
     except Exception as e:
-        return None, f"❌ Σφάλμα API: {e}"
+        return None, f"❌ Σφάλμα σύνταξης πρακτικών: {e}"
+
+
+def call_claude_audio(audio_bytes: bytes, ext: str, context: str,
+                      progress_cb=None) -> tuple:
+    """
+    Κύρια συνάρτηση:
+    1. Σπάει σε chunks αν χρειάζεται
+    2. Μεταγράφει κάθε chunk ξεχωριστά
+    3. Συνδυάζει και συντάσσει Πρακτικά
+    """
+    api_key = get_api_key()
+    if not api_key:
+        return None, "❌ Δεν βρέθηκε ANTHROPIC_API_KEY στα Streamlit Secrets."
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+    except ImportError:
+        return None, "❌ Προσθέστε 'anthropic' στο requirements.txt"
+
+    size_mb = len(audio_bytes) / (1024 * 1024)
+
+    # ── Αν χωράει σε ένα call, στείλε κατευθείαν ──────────────
+    if len(audio_bytes) <= MAX_CHUNK_BYTES:
+        media_type = MIME_MAP.get(ext, "audio/mpeg")
+        b64 = base64.standard_b64encode(audio_bytes).decode()
+        try:
+            msg = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=8000,
+                system="""Είσαι Γραμματεύς-Σφραγιδοφύλαξ ΜΣΤΕ. Μεταγράψε και σύνταξε Πρακτικά.
+Επέστρεψε ΜΟΝΟ JSON (χωρίς backticks) με πεδία:
+μεταγραφή_λέξη_προς_λέξη, ημερομηνία, ημέρα, βαθμός_γενική, τόπος, σεβάσμιος,
+παρόντες_αριθμός, παρόντες_ολογράφως, ημερησία_διάταξη, κείμενο_πρακτικών,
+αποφάσεις, κορμός_αγαθοεργίας, κορμός_ολογράφως, γραμματεύς, ρήτωρ""",
+                messages=[{"role":"user","content":[
+                    {"type":"text","text":f"Πλαίσιο: {context}. Κάνε μεταγραφή και πρακτικά ΜΣΤΕ."},
+                    {"type":"audio","source":{"type":"base64","media_type":media_type,"data":b64}}
+                ]}]
+            )
+            raw   = msg.content[0].text if msg.content else ""
+            clean = re.sub(r"^```[a-z]*\n?","",raw.strip())
+            clean = re.sub(r"\n?```$","",clean.strip())
+            return json.loads(clean), None
+        except json.JSONDecodeError:
+            return {"μεταγραφή_λέξη_προς_λέξη":raw,"κείμενο_πρακτικών":raw}, None
+        except Exception as e:
+            return None, f"❌ Σφάλμα API: {e}"
+
+    # ── Μεγάλο αρχείο → κατάτμηση ─────────────────────────────
+    if progress_cb:
+        progress_cb(0, f"📦 Μεγάλο αρχείο ({size_mb:.1f}MB) — κατάτμηση σε chunks…")
+
+    chunks = _split_into_chunks(audio_bytes, ext)
+    n = len(chunks)
+
+    if progress_cb:
+        progress_cb(5, f"✂️ {n} chunks × ~3 λεπτά — μεταγραφή…")
+
+    # Μεταγραφή κάθε chunk
+    transcripts = []
+    for i, chunk in enumerate(chunks):
+        if progress_cb:
+            pct = 10 + int(70 * i / n)
+            progress_cb(pct, f"🎧 Μεταγραφή chunk {i+1}/{n}…")
+        text = _transcribe_chunk(client, chunk, i, n)
+        transcripts.append(f"=== Chunk {i+1}/{n} ===\n{text}")
+
+    full_transcript = "\n\n".join(transcripts)
+
+    # Σύνταξη Πρακτικών από συνδυασμένη μεταγραφή
+    if progress_cb:
+        progress_cb(85, "📝 Σύνταξη επίσημων Πρακτικών…")
+
+    return _format_into_praktiko(client, full_transcript, context)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -469,10 +610,24 @@ with tab_main:
         ctx = (f"Βαθμός: {sel_βαθμ} | Ημερομηνία: {sel_ημερ} | "
                f"Σεβ∴ Διδ∴: {sel_σεβ} | Γραμματεύς: {sel_γραμ} | Ρήτωρ: {sel_ρητ}\n{sel_extra}")
 
-        with st.spinner("🔄 Claude AI μεταγράφει και συντάσσει πρακτικά… (~2-3 λεπτά)"):
-            result, err = call_claude_audio(
-                st.session_state["ready_audio"],
-                st.session_state["ready_ext"], ctx)
+        size_mb = len(st.session_state["ready_audio"]) / (1024*1024)
+        progress_bar  = st.progress(0)
+        status_text   = st.empty()
+
+        def progress_cb(pct, msg):
+            progress_bar.progress(pct)
+            status_text.info(msg)
+
+        progress_cb(2, f"🚀 Έναρξη επεξεργασίας {size_mb:.1f}MB αρχείου…")
+
+        result, err = call_claude_audio(
+            st.session_state["ready_audio"],
+            st.session_state["ready_ext"], ctx,
+            progress_cb=progress_cb
+        )
+
+        progress_bar.progress(100)
+        status_text.empty()
 
         if err:
             st.error(err)
