@@ -1,319 +1,478 @@
 # -*- coding: utf-8 -*-
 """
 Σελίδα 17 — Μεταγραφή Ηχογράφησης → Πρακτικά ΜΣΤΕ
-WAV/MP3 upload → MP3 compress → Claude AI → Μεταγραφή → Επεξεργασία → PDF
+
+Ροή:
+1. Upload αρχείου ήχου: wav/mp3/m4a/ogg/webm/aac
+2. Μετατροπή/κανονικοποίηση σε MP3 mono 16kHz
+3. Αυτόματο split σε chunks με overlap
+4. OpenAI transcription στα Ελληνικά με domain prompt
+5. Καθαρισμός hallucinations / υποτίτλων / άχρηστων επαναλήψεων
+6. Claude → σύνταξη επίσημων Πρακτικών σε JSON
+7. Editor → PDF
 """
-import sys; sys.path.append("..")
-import streamlit as st
-import base64, io, json, re, os
+
+import sys
+sys.path.append("..")
+
+import io
+import json
+import os
+import re
 from datetime import date
+from typing import Callable, Optional, Tuple, List, Dict, Any
+
+import streamlit as st
+
 from modules.database import init_db
 
+# ══════════════════════════════════════════════════════════════
+# APP SETUP
+# ══════════════════════════════════════════════════════════════
 init_db()
-st.set_page_config(page_title="Μεταγραφή → Πρακτικά", page_icon="🎧", layout="wide")
+
+st.set_page_config(
+    page_title="Μεταγραφή → Πρακτικά",
+    page_icon="🎧",
+    layout="wide"
+)
 
 st.markdown("# 🎧 Ηχογράφηση → Πρακτικά ΜΣΤΕ")
-st.caption("WAV/MP3 ανεβαίνει · συμπιέζεται σε MP3 · μεταγράφεται από Claude AI · επεξεργάζεστε · εκτυπώνετε PDF")
+st.caption("Ηχογράφηση → OpenAI transcription → Claude σύνταξη πρακτικών → επεξεργασία → PDF")
 
 # ══════════════════════════════════════════════════════════════
 # ΣΤΑΘΕΡΕΣ
 # ══════════════════════════════════════════════════════════════
-MAX_MB_RAW  = 150
-MAX_MB_SEND = 20
-SUPPORTED   = ["wav","mp3","m4a","ogg","webm","aac"]
-MIME_MAP    = {"wav":"audio/wav","mp3":"audio/mpeg","m4a":"audio/mp4",
-               "ogg":"audio/ogg","webm":"audio/webm","aac":"audio/aac"}
-ΒΑΘΜΟΙ_GEN = {"Α' - Μαθητής":"Μαθητού","Β' - Εταίρος":"Εταίρου","Γ' - Διδάσκαλος":"Διδασκάλου"}
+MAX_MB_RAW = 300
+SUPPORTED = ["wav", "mp3", "m4a", "ogg", "webm", "aac"]
+
+ΒΑΘΜΟΙ_GEN = {
+    "Α' - Μαθητής": "Μαθητού",
+    "Β' - Εταίρος": "Εταίρου",
+    "Γ' - Διδάσκαλος": "Διδασκάλου",
+}
+
 NAVY = "#1a2a4a"
 GOLD = "#b8960c"
 
-# ══════════════════════════════════════════════════════════════
-# HELPERS
-# ══════════════════════════════════════════════════════════════
+# Για transcription: 10 λεπτά ανά chunk + 10 sec overlap
+CHUNK_SEC = 600
+OVERLAP_SEC = 10
+AUDIO_RATE = 16000
+AUDIO_BITRATE = 64000
 
-def get_api_key():
+TRANSCRIPTION_MODEL_PRIMARY = "gpt-4o-transcribe"
+TRANSCRIPTION_MODEL_FALLBACK = "whisper-1"
+CLAUDE_MODEL = "claude-sonnet-4-20250514"
+
+TRANSCRIPTION_PROMPT = """
+Η ηχογράφηση είναι ελληνική τεκτονική συνεδρίαση της Στοάς Ακρόπολις υπ' αριθμόν 84.
+Μετέγραψε όσο πιο πιστά γίνεται στα Ελληνικά.
+
+Συχνές λέξεις και φράσεις:
+Σεβάσμιος, Σεβασμιώτατε, Αδελφός, Αδελφοί, Στοά, Στοά Ακρόπολις,
+Ακρόπολις 84, Ρήτωρ, Γραμματεύς, Επόπτης, Τελετάρχης, Θησαυροφύλαξ,
+Αγαθοεργία, Κορμός Αγαθοεργίας, Μέγας Αρχιτέκτων του Σύμπαντος,
+Εργασίες, Πρακτικά, Ημερησία Διάταξις, Ανατολή, Μεσημβρία, Βορράς,
+Ναός, Βαθμός Μαθητού, Βαθμός Εταίρου, Βαθμός Διδασκάλου.
+
+Μην προσθέτεις δικά σου λόγια.
+Μην επινοείς κείμενο όταν δεν ακούγεται καθαρά.
+Μην γράφεις “Υπότιτλοι AUTHORWAVE”.
+Μην γράφεις “Ευχαριστούμε που παρακολουθήσατε”.
+Αν ένα σημείο δεν ακούγεται, γράψε [ακατάληπτο].
+""".strip()
+
+# ══════════════════════════════════════════════════════════════
+# API KEYS
+# ══════════════════════════════════════════════════════════════
+def get_openai_key() -> str:
     try:
-        return (st.secrets.get("AI",{}).get("ANTHROPIC_API_KEY") or
-                st.secrets.get("ANTHROPIC_API_KEY",""))
+        return (
+            st.secrets.get("AI", {}).get("OPENAI_API_KEY")
+            or st.secrets.get("OPENAI_API_KEY", "")
+        )
     except Exception:
         return ""
 
 
-def compress_to_mp3(audio_bytes: bytes, ext: str):
+def get_anthropic_key() -> str:
+    try:
+        return (
+            st.secrets.get("AI", {}).get("ANTHROPIC_API_KEY")
+            or st.secrets.get("ANTHROPIC_API_KEY", "")
+        )
+    except Exception:
+        return ""
+
+# ══════════════════════════════════════════════════════════════
+# AUDIO HELPERS
+# ══════════════════════════════════════════════════════════════
+def normalize_to_mp3(audio_bytes: bytes, ext: str) -> Tuple[Optional[bytes], Optional[str]]:
     """
-    Συμπίεση ηχητικού σε MP3 128kbps / mono 16kHz.
-    Χρησιμοποιεί PyAV (ενσωματωμένο ffmpeg — δεν χρειάζεται system ffmpeg).
-    Fallback: built-in Python wave+audioop για WAV αρχεία.
+    Μετατρέπει οποιοδήποτε supported audio σε MP3 mono 16kHz.
+    Επιστρέφει: (mp3_bytes, error_message)
     """
-    # ── PyAV (πρωτεύουσα μέθοδος — δουλεύει για WAV, MP3, M4A, OGG) ──
     try:
         import av
-        in_buf  = io.BytesIO(audio_bytes)
+
+        in_buf = io.BytesIO(audio_bytes)
         out_buf = io.BytesIO()
+
         with av.open(in_buf) as inp:
+            audio_stream = next((s for s in inp.streams if s.type == "audio"), None)
+            if audio_stream is None:
+                return None, "❌ Δεν βρέθηκε audio stream στο αρχείο."
+
             with av.open(out_buf, mode="w", format="mp3") as out:
-                ostream = out.add_stream("mp3", rate=16000)
-                ostream.bit_rate = 128000
+                ostream = out.add_stream("mp3", rate=AUDIO_RATE)
+                ostream.bit_rate = AUDIO_BITRATE
+
                 for frame in inp.decode(audio=0):
                     frame.pts = None
                     for pkt in ostream.encode(frame):
                         out.mux(pkt)
+
                 for pkt in ostream.encode():
                     out.mux(pkt)
+
         out_buf.seek(0)
-        return out_buf.read(), None, "mp3"
+        return out_buf.read(), None
+
     except ImportError:
-        pass  # av δεν υπάρχει → fallback
-    except Exception:
-        pass  # άλλο σφάλμα → fallback
-
-    # ── Fallback pydub+ffmpeg (αν υπάρχει) ───────────────────
-    try:
-        from pydub import AudioSegment
-        fmt = ext if ext not in ("m4a","aac") else "mp4"
-        seg = AudioSegment.from_file(io.BytesIO(audio_bytes), format=fmt)
-        out = io.BytesIO()
-        seg.export(out, format="mp3", bitrate="128k")
-        out.seek(0)
-        return out.read(), None, "mp3"
-    except Exception:
-        pass
-
-    # ── Fallback WAV-only (built-in Python, χωρίς εξωτερικά) ─
-    if ext == "wav":
-        try:
-            import wave, audioop
-            with wave.open(io.BytesIO(audio_bytes)) as wf:
-                n_ch      = wf.getnchannels()
-                orig_rate = wf.getframerate()
-                sw        = wf.getsampwidth()
-                frames    = wf.readframes(wf.getnframes())
-            if n_ch == 2:
-                frames = audioop.tomono(frames, sw, 0.5, 0.5)
-            if orig_rate != 16000:
-                frames, _ = audioop.ratecv(frames, sw, 1, orig_rate, 16000, None)
-            out = io.BytesIO()
-            with wave.open(out, "wb") as wo:
-                wo.setnchannels(1); wo.setsampwidth(sw)
-                wo.setframerate(16000); wo.writeframes(frames)
-            out.seek(0)
-            new_mb = len(out.getvalue())/(1024*1024)
-            return out.getvalue(), f"⚠️ Χρησιμοποιήθηκε Python fallback → mono 16kHz WAV ({new_mb:.1f}MB)", "wav"
-        except Exception as e:
-            return None, f"❌ Σφάλμα: {e}", None
-
-    return None, (
-        "❌ Αδυναμία συμπίεσης.\n"
-        "Προσθέστε `av` στο requirements.txt και κάντε redeploy.\n"
-        "Εναλλακτικά ανεβάστε το αρχείο ήδη σε MP3."
-    ), None
+        return None, "❌ Λείπει το package `av`. Πρόσθεσέ το στο requirements.txt."
+    except Exception as e:
+        return None, f"❌ Σφάλμα στη μετατροπή ήχου: {e}"
 
 
-# ── Σταθερά: max bytes ανά API call (4MB safe limit) ──────────
-MAX_CHUNK_BYTES = 4 * 1024 * 1024
-
-
-def _split_into_chunks(audio_bytes: bytes, ext: str) -> list[bytes]:
+def split_audio_to_chunks(audio_bytes: bytes) -> Tuple[List[bytes], Optional[str]]:
     """
-    Σπάει το ηχητικό σε chunks ~4MB έκαστο με PyAV.
-    Κάθε chunk: mono MP3 64kbps 16kHz ≈ ~3 λεπτά.
+    Σπάει το normalized MP3 σε chunks περίπου CHUNK_SEC με OVERLAP_SEC overlap.
+    Επιστρέφει chunks σε MP3 bytes.
     """
     try:
         import av
-        CHUNK_SEC = 180  # 3 λεπτά ανά chunk
+
+        chunks: List[bytes] = []
         in_buf = io.BytesIO(audio_bytes)
-        chunks = []
 
         with av.open(in_buf) as container:
             audio_stream = next((s for s in container.streams if s.type == "audio"), None)
             if audio_stream is None:
-                return [audio_bytes]  # δεν μπόρεσε να βρει audio stream
+                return [audio_bytes], None
 
             total_us = container.duration or 0
-            total_sec = total_us / 1_000_000 if total_us else 7200
-            n_chunks = max(1, int(total_sec / CHUNK_SEC) + 1)
+            if total_us <= 0:
+                return [audio_bytes], None
 
-            for i in range(n_chunks):
-                start_us = int(i * CHUNK_SEC * 1_000_000)
-                end_sec  = (i + 1) * CHUNK_SEC
-                out_buf  = io.BytesIO()
+            total_sec = int(total_us / 1_000_000)
+            start_points = list(range(0, total_sec, CHUNK_SEC - OVERLAP_SEC))
 
-                try:
-                    container.seek(start_us)
-                    with av.open(out_buf, mode="w", format="mp3") as out:
-                        ostream = out.add_stream("mp3", rate=16000)
-                        ostream.bit_rate = 64000
-                        frames_written = 0
-                        for frame in container.decode(audio=0):
-                            if frame.pts is None:
-                                continue
-                            t = float(frame.pts * audio_stream.time_base)
-                            if t >= end_sec:
-                                break
-                            frame.pts = None
-                            for pkt in ostream.encode(frame):
-                                out.mux(pkt)
-                            frames_written += 1
-                        for pkt in ostream.encode():
+            for start_sec in start_points:
+                end_sec = min(start_sec + CHUNK_SEC, total_sec)
+                out_buf = io.BytesIO()
+
+                container.seek(int(start_sec * 1_000_000))
+
+                with av.open(out_buf, mode="w", format="mp3") as out:
+                    ostream = out.add_stream("mp3", rate=AUDIO_RATE)
+                    ostream.bit_rate = AUDIO_BITRATE
+
+                    frames_written = 0
+                    for frame in container.decode(audio=0):
+                        if frame.pts is None:
+                            continue
+
+                        t = float(frame.pts * audio_stream.time_base)
+                        if t >= end_sec:
+                            break
+
+                        frame.pts = None
+                        for pkt in ostream.encode(frame):
                             out.mux(pkt)
-                    out_buf.seek(0)
-                    data = out_buf.read()
-                    if len(data) > 5000:  # αγνόησε κενά chunks
-                        chunks.append(data)
-                except Exception:
-                    break
+                        frames_written += 1
 
-        return chunks if chunks else [audio_bytes]
+                    for pkt in ostream.encode():
+                        out.mux(pkt)
+
+                out_buf.seek(0)
+                data = out_buf.read()
+
+                if len(data) > 5000:
+                    chunks.append(data)
+
+        return chunks if chunks else [audio_bytes], None
+
     except ImportError:
-        return [audio_bytes]  # χωρίς av, στείλε ολόκληρο (θα αποτύχει αν μεγάλο)
+        return [audio_bytes], None
+    except Exception as e:
+        return [audio_bytes], f"⚠️ Δεν έγινε σωστό split. Θα σταλεί ως ένα αρχείο. Λεπτομέρεια: {e}"
 
-
-def get_openai_key():
-    try:
-        return (st.secrets.get("AI",{}).get("OPENAI_API_KEY") or
-                st.secrets.get("OPENAI_API_KEY",""))
-    except Exception:
+# ══════════════════════════════════════════════════════════════
+# TRANSCRIPTION CLEANING
+# ══════════════════════════════════════════════════════════════
+def clean_transcript(text: str) -> str:
+    """Καθαρίζει συχνά hallucinations από ελληνικά transcriptions."""
+    if not text:
         return ""
 
+    junk_patterns = [
+        r"Υπότιτλοι\s+AUTHORWAVE",
+        r"Υποτιτλοι\s+AUTHORWAVE",
+        r"AUTHORWAVE",
+        r"Ευχαριστούμε πολύ που παρακολουθήσατε το βίντεο!?",
+        r"Παρακολουθείτε και εγγραφείτε στο κανάλι μας.*?(?=\n|$)",
+        r"www\.argirobarbarigou\.com",
+        r"\bUSING\b",
+        r"\bresolving\b",
+        r"\bprogresses\b",
+        r"\battendant\b",
+    ]
 
-def _transcribe_chunk(chunk: bytes, chunk_idx: int, total: int) -> str:
-    """Μεταγράφει chunk μέσω OpenAI Whisper API."""
+    for pat in junk_patterns:
+        text = re.sub(pat, " ", text, flags=re.IGNORECASE | re.MULTILINE)
+
+    # Αφαίρεση ακραίων επαναλήψεων ίδιας φράσης στην ίδια γραμμή
+    text = re.sub(r"(.{8,80}?)(\s+\1){2,}", r"\1", text, flags=re.IGNORECASE)
+
+    # Καθαρισμός κενών
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    text = re.sub(r"\n[ \t]+", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    return text.strip()
+
+
+def remove_overlap_repetition(full_text: str) -> str:
+    """
+    Ελαφρύ καθάρισμα από επαναλήψεις λόγω overlap.
+    Δεν είναι επιθετικό για να μη σβήσει χρήσιμο τεκτονικό κείμενο.
+    """
+    lines = [l.strip() for l in full_text.splitlines() if l.strip()]
+    cleaned = []
+
+    for line in lines:
+        if cleaned and line == cleaned[-1]:
+            continue
+        cleaned.append(line)
+
+    return "\n".join(cleaned).strip()
+
+# ══════════════════════════════════════════════════════════════
+# OPENAI TRANSCRIPTION
+# ══════════════════════════════════════════════════════════════
+def transcribe_chunk(chunk: bytes, chunk_idx: int, total: int) -> str:
     openai_key = get_openai_key()
     if not openai_key:
-        return f"[❌ Chunk {chunk_idx+1}: Δεν βρέθηκε OPENAI_API_KEY στα Secrets]"
+        return f"[❌ Chunk {chunk_idx + 1}: Δεν βρέθηκε OPENAI_API_KEY στα Streamlit Secrets]"
+
     try:
         from openai import OpenAI
+
         client = OpenAI(api_key=openai_key)
-        # Whisper δέχεται file-like object με όνομα
         audio_file = io.BytesIO(chunk)
-        audio_file.name = "chunk.mp3"
-        result = client.audio.transcriptions.create(
-            model="whisper-1",
-            file=audio_file,
-            language="el",          # Ελληνικά
-            response_format="text"
-        )
-        return str(result).strip()
+        audio_file.name = f"chunk_{chunk_idx + 1}.mp3"
+
+        try:
+            result = client.audio.transcriptions.create(
+                model=TRANSCRIPTION_MODEL_PRIMARY,
+                file=audio_file,
+                language="el",
+                prompt=TRANSCRIPTION_PROMPT,
+                response_format="text",
+                temperature=0,
+            )
+        except Exception:
+            # fallback για accounts/libraries που δεν δέχονται ακόμα gpt-4o-transcribe
+            audio_file.seek(0)
+            result = client.audio.transcriptions.create(
+                model=TRANSCRIPTION_MODEL_FALLBACK,
+                file=audio_file,
+                language="el",
+                prompt=TRANSCRIPTION_PROMPT,
+                response_format="text",
+                temperature=0,
+            )
+
+        return clean_transcript(str(result))
+
     except ImportError:
-        return f"[❌ Chunk {chunk_idx+1}: Προσθέστε 'openai' στο requirements.txt]"
+        return f"[❌ Chunk {chunk_idx + 1}: Προσθέστε `openai` στο requirements.txt]"
     except Exception as e:
-        return f"[❌ Chunk {chunk_idx+1}: {e}]"
+        return f"[❌ Chunk {chunk_idx + 1}: {e}]"
 
 
-def _format_into_praktiko(client, transcript: str, context: str) -> tuple:
-    """Παίρνει συνδυασμένη μεταγραφή → επίσημα Πρακτικά ΜΣΤΕ σε JSON."""
-    system = """Είσαι Γραμματεύς-Σφραγιδοφύλαξ της Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ υπ' αρ. 84 (ΜΣΤΕ).
-Σου δίνεται μεταγραφή Τεκτονικής Συνεδρίασης. Σύνταξε επίσημα Πρακτικά.
+def transcribe_audio(audio_bytes: bytes, ext: str, progress_cb: Optional[Callable] = None) -> Tuple[str, Optional[str]]:
+    """
+    Πλήρης μεταγραφή:
+    1. normalize σε MP3
+    2. split
+    3. transcribe chunks
+    4. clean/merge
+    """
+    if progress_cb:
+        progress_cb(5, "🎚️ Κανονικοποίηση ήχου σε MP3 mono 16kHz…")
+
+    mp3_bytes, err = normalize_to_mp3(audio_bytes, ext)
+    if err:
+        return "", err
+
+    if progress_cb:
+        progress_cb(12, "✂️ Διαχωρισμός ηχογράφησης σε ασφαλή τμήματα…")
+
+    chunks, split_warning = split_audio_to_chunks(mp3_bytes)
+    n = len(chunks)
+
+    transcripts = []
+    for i, chunk in enumerate(chunks):
+        if progress_cb:
+            pct = 15 + int(65 * (i / max(n, 1)))
+            progress_cb(pct, f"🎧 Μεταγραφή τμήματος {i + 1}/{n}…")
+
+        text = transcribe_chunk(chunk, i, n)
+        if text:
+            transcripts.append(f"=== Τμήμα {i + 1}/{n} ===\n{text}")
+
+    full_transcript = "\n\n".join(transcripts)
+    full_transcript = clean_transcript(full_transcript)
+    full_transcript = remove_overlap_repetition(full_transcript)
+
+    if split_warning:
+        return full_transcript, split_warning
+
+    return full_transcript, None
+
+# ══════════════════════════════════════════════════════════════
+# CLAUDE → ΠΡΑΚΤΙΚΑ
+# ══════════════════════════════════════════════════════════════
+def format_into_praktiko(transcript: str, context: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    anthropic_key = get_anthropic_key()
+    if not anthropic_key:
+        return None, "❌ Δεν βρέθηκε ANTHROPIC_API_KEY στα Streamlit Secrets."
+
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=anthropic_key)
+    except ImportError:
+        return None, "❌ Προσθέστε `anthropic` στο requirements.txt."
+
+    system = """
+Είσαι Γραμματεύς-Σφραγιδοφύλαξ της Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ υπ' αρ. 84.
+Σου δίνεται ακατέργαστη μεταγραφή ελληνικής τεκτονικής συνεδρίασης.
+Στόχος σου είναι να συντάξεις επίσημα Πρακτικά ΜΣΤΕ.
+
+Πολύ σημαντικό:
+- Μην εφευρίσκεις ονόματα, ποσά, αποφάσεις ή αριθμούς παρόντων αν δεν υπάρχουν καθαρά.
+- Αν κάτι δεν προκύπτει, άφησέ το κενό ή γράψε “Δεν προέκυψε σαφώς από τη μεταγραφή”.
+- Κράτα επίσημο, αρχαιοπρεπές, γραμματειακό ύφος.
+- Διόρθωσε εμφανή λάθη μεταγραφής μόνο όταν το νόημα είναι σαφές.
+- Απόφυγε άσχετα κείμενα τύπου υπότιτλοι, διαφημίσεις, κλπ.
 
 Υποχρεωτική δομή κειμένου:
-• Έναρξη («Σήμερον [ημέρα] [ημερομηνία], εις [τόπο], υπό την Σφύραν του Σεβ∴ Διδ∴ ... ανοίγουν αι Εργασίαι εις Βαθμόν [βαθμός].»)
-• Παρόντες ([αριθμός ολογράφως] ([αριθμός]) Αδδ∴, ενεργά μέλη)
-• Θέσεις αξιωματικών
-• Αλληλογραφία (ο Αδ∴ Ρήτ∴ ανέγνωσεν...)
-• Επικύρωση προηγουμένων πρακτικών
-• Εργασίες / Ομιλίες / Αποφάσεις (αναλυτικά)
-• Κεφάλαιον Αγαθοεργίας
+• Έναρξη
+• Παρόντες
+• Θέσεις αξιωματικών, εφόσον προκύπτουν
+• Αλληλογραφία, εφόσον προκύπτει
+• Επικύρωση προηγουμένων πρακτικών, εφόσον προκύπτει
+• Εργασίες / Ομιλίες / Αποφάσεις
+• Κεφάλαιον Αγαθοεργίας, εφόσον προκύπτει
 • Κλείσιμο
 
-Χρησιμοποίησε: Σεβ∴ Διδ∴, Αδ∴, Σ∴ Στ∴, Βαθμ∴ Μαθ∴/Ετ∴/Διδ∴, Γραμμ∴, Ρήτ∴ κλπ.
-Αρχαιοπρεπές επίσημο τεκτονικό ύφος. Παράγραφοι χωρισμένες με κενή γραμμή.
+Χρησιμοποίησε όπου ταιριάζει:
+Σεβ∴ Διδ∴, Αδ∴, Αδδ∴, Σ∴ Στ∴, Βαθμ∴ Μαθ∴/Ετ∴/Διδ∴, Γραμμ∴, Ρήτ∴.
 
-Επέστρεψε ΜΟΝΟ JSON (χωρίς backticks):
+Επέστρεψε ΜΟΝΟ valid JSON, χωρίς markdown, χωρίς backticks, με ακριβώς αυτά τα keys:
 {
   "ημερομηνία": "DD/MM/YYYY",
-  "ημέρα": "Τρίτην",
+  "ημέρα": "",
   "βαθμός_γενική": "Μαθητού",
-  "τόπος": "τον Τεκτ∴ Ναόν ...",
-  "σεβάσμιος": "Όνομα Επώνυμο",
-  "παρόντες_αριθμός": 14,
-  "παρόντες_ολογράφως": "δέκα τέσσερεις",
-  "ημερησία_διάταξη": ["Θέμα 1","Θέμα 2"],
-  "κείμενο_πρακτικών": "Σήμερον Τρίτην...\n\nΠαρόντες...\n\n...",
-  "αποφάσεις": ["Απόφαση 1"],
-  "κορμός_αγαθοεργίας": 20.0,
-  "κορμός_ολογράφως": "είκοσι",
-  "γραμματεύς": "Όνομα Επώνυμο",
-  "ρήτωρ": "Όνομα Επώνυμο"
-}"""
+  "τόπος": "",
+  "σεβάσμιος": "",
+  "παρόντες_αριθμός": 0,
+  "παρόντες_ολογράφως": "",
+  "ημερησία_διάταξη": [],
+  "κείμενο_πρακτικών": "",
+  "αποφάσεις": [],
+  "κορμός_αγαθοεργίας": 0.0,
+  "κορμός_ολογράφως": "",
+  "γραμματεύς": "",
+  "ρήτωρ": ""
+}
+""".strip()
+
     try:
         msg = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=CLAUDE_MODEL,
             max_tokens=8000,
             system=system,
-            messages=[{"role":"user","content":
-                f"Πλαίσιο: {context or '-'}\n\nΜεταγραφή:\n{transcript}"
-            }]
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"Πλαίσιο συνεδρίασης από τη φόρμα:\n{context or '-'}\n\nΑκατέργαστη μεταγραφή:\n{transcript}",
+                }
+            ],
         )
-        raw   = msg.content[0].text if msg.content else ""
-        clean = re.sub(r"^```[a-z]*\n?","",raw.strip())
-        clean = re.sub(r"\n?```$","",clean.strip())
+
+        raw = msg.content[0].text if msg.content else ""
+        clean = raw.strip()
+        clean = re.sub(r"^```(?:json)?\s*", "", clean)
+        clean = re.sub(r"\s*```$", "", clean)
+
         result = json.loads(clean)
         result["μεταγραφή_λέξη_προς_λέξη"] = transcript
         return result, None
+
     except json.JSONDecodeError:
-        return {"μεταγραφή_λέξη_προς_λέξη":transcript, "κείμενο_πρακτικών":raw}, None
+        return {
+            "ημερομηνία": "",
+            "ημέρα": "",
+            "βαθμός_γενική": "Μαθητού",
+            "τόπος": "",
+            "σεβάσμιος": "",
+            "παρόντες_αριθμός": 0,
+            "παρόντες_ολογράφως": "",
+            "ημερησία_διάταξη": [],
+            "κείμενο_πρακτικών": raw if "raw" in locals() else "",
+            "αποφάσεις": [],
+            "κορμός_αγαθοεργίας": 0.0,
+            "κορμός_ολογράφως": "",
+            "γραμματεύς": "",
+            "ρήτωρ": "",
+            "μεταγραφή_λέξη_προς_λέξη": transcript,
+        }, "⚠️ Ο Claude δεν επέστρεψε καθαρό JSON. Το κείμενο μπήκε στον editor για χειροκίνητο έλεγχο."
     except Exception as e:
         return None, f"❌ Σφάλμα σύνταξης πρακτικών: {e}"
 
 
-def call_claude_audio(audio_bytes: bytes, ext: str, context: str,
-                      progress_cb=None) -> tuple:
-    """
-    Κύρια συνάρτηση:
-    1. Σπάει σε chunks αν χρειάζεται
-    2. Μεταγράφει κάθε chunk ξεχωριστά
-    3. Συνδυάζει και συντάσσει Πρακτικά
-    """
-    api_key = get_api_key()
-    if not api_key:
-        return None, "❌ Δεν βρέθηκε ANTHROPIC_API_KEY στα Streamlit Secrets."
-    try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
-    except ImportError:
-        return None, "❌ Προσθέστε 'anthropic' στο requirements.txt"
-
-    size_mb = len(audio_bytes) / (1024 * 1024)
-
-    # ── Αν χωράει σε ένα call → Whisper + Claude ──────────────
-    if len(audio_bytes) <= MAX_CHUNK_BYTES:
-        if progress_cb:
-            progress_cb(10, "🎧 Μεταγραφή μέσω Whisper…")
-        transcript = _transcribe_chunk(audio_bytes, 0, 1)
-        if progress_cb:
-            progress_cb(60, "📝 Σύνταξη Πρακτικών…")
-        return _format_into_praktiko(client, transcript, context)
-
-    # ── Μεγάλο αρχείο → κατάτμηση ─────────────────────────────
+def process_audio_to_praktiko(audio_bytes: bytes, ext: str, context: str, progress_cb: Optional[Callable] = None):
     if progress_cb:
-        progress_cb(0, f"📦 Μεγάλο αρχείο ({size_mb:.1f}MB) — κατάτμηση σε chunks…")
+        progress_cb(2, "🚀 Έναρξη επεξεργασίας…")
 
-    chunks = _split_into_chunks(audio_bytes, ext)
-    n = len(chunks)
+    transcript, transcribe_warning_or_error = transcribe_audio(audio_bytes, ext, progress_cb)
+
+    if not transcript:
+        return None, transcribe_warning_or_error or "❌ Δεν δημιουργήθηκε μεταγραφή."
 
     if progress_cb:
-        progress_cb(5, f"✂️ {n} chunks × ~3 λεπτά — μεταγραφή…")
+        progress_cb(82, "🧹 Καθαρισμός μεταγραφής…")
 
-    # Μεταγραφή κάθε chunk
-    transcripts = []
-    for i, chunk in enumerate(chunks):
-        if progress_cb:
-            pct = 10 + int(70 * i / n)
-            progress_cb(pct, f"🎧 Μεταγραφή chunk {i+1}/{n}…")
-        text = _transcribe_chunk(chunk, i, n)
-        transcripts.append(f"=== Chunk {i+1}/{n} ===\n{text}")
+    transcript = clean_transcript(transcript)
 
-    full_transcript = "\n\n".join(transcripts)
-
-    # Σύνταξη Πρακτικών από συνδυασμένη μεταγραφή
     if progress_cb:
-        progress_cb(85, "📝 Σύνταξη επίσημων Πρακτικών…")
+        progress_cb(88, "📝 Σύνταξη επίσημων Πρακτικών με Claude…")
 
-    return _format_into_praktiko(client, full_transcript, context)
+    result, praktiko_err = format_into_praktiko(transcript, context)
 
+    if progress_cb:
+        progress_cb(100, "✅ Ολοκληρώθηκε.")
+
+    if result and transcribe_warning_or_error and transcribe_warning_or_error.startswith("⚠️"):
+        result["προειδοποίηση"] = transcribe_warning_or_error
+
+    return result, praktiko_err
 
 # ══════════════════════════════════════════════════════════════
-# PDF GENERATOR — ακριβές στυλ υποδείγματος ΜΣΤΕ
+# PDF GENERATOR
 # ══════════════════════════════════════════════════════════════
 def generate_praktiko_pdf(d: dict) -> io.BytesIO:
     from reportlab.lib.pagesizes import A4
@@ -321,139 +480,161 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
     from reportlab.lib import colors
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY, TA_RIGHT
-    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
-                                    HRFlowable, Table, TableStyle)
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
 
-    _base = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts")
-    for alias, fn in {
-        "DSS":"DejaVuSans.ttf","DSSB":"DejaVuSans-Bold.ttf",
-        "DSR":"DejaVuSerif.ttf","DSB":"DejaVuSerif-Bold.ttf","DSI":"DejaVuSerif-Italic.ttf",
-    }.items():
-        if alias not in pdfmetrics.getRegisteredFontNames():
-            pdfmetrics.registerFont(TTFont(alias, os.path.join(_base, fn)))
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    font_dir = os.path.join(base_dir, "fonts")
 
-    CNVY  = colors.HexColor(NAVY)
-    CGOLD = colors.HexColor(GOLD)
+    fonts = {
+        "DSS": "DejaVuSans.ttf",
+        "DSSB": "DejaVuSans-Bold.ttf",
+        "DSR": "DejaVuSerif.ttf",
+        "DSB": "DejaVuSerif-Bold.ttf",
+        "DSI": "DejaVuSerif-Italic.ttf",
+    }
 
-    def S(nm, **kw): return ParagraphStyle(nm, **kw)
+    for alias, filename in fonts.items():
+        path = os.path.join(font_dir, filename)
+        if alias not in pdfmetrics.getRegisteredFontNames() and os.path.exists(path):
+            pdfmetrics.registerFont(TTFont(alias, path))
 
-    # Styles — Sans για ∴, Serif για σώμα κειμένου
-    H1   = S("H1",  fontName="DSSB", fontSize=12, alignment=TA_CENTER, spaceAfter=2, leading=15)
-    H2   = S("H2",  fontName="DSS",  fontSize=10, alignment=TA_CENTER, spaceAfter=2, leading=13)
-    LDG  = S("LDG", fontName="DSSB", fontSize=10, alignment=TA_CENTER, spaceAfter=6, leading=13)
-    TTL  = S("TTL", fontName="DSSB", fontSize=11, alignment=TA_CENTER, spaceAfter=2,
-             spaceBefore=6, leading=15, textColor=CNVY)
-    HDA  = S("HDA", fontName="DSSB", fontSize=10, alignment=TA_LEFT,  spaceAfter=4, leading=13)
-    BUL  = S("BUL", fontName="DSR",  fontSize=10, alignment=TA_LEFT,  leftIndent=20,
-             spaceAfter=3, leading=14)
-    BOD  = S("BOD", fontName="DSR",  fontSize=10, alignment=TA_JUSTIFY, spaceAfter=6, leading=15)
-    SML  = S("SML", fontName="DSR",  fontSize=8,  alignment=TA_CENTER, textColor=colors.grey,
-             spaceAfter=2)
-    SGN  = S("SGN", fontName="DSR",  fontSize=10, alignment=TA_CENTER, spaceAfter=0, leading=14)
-    SGNB = S("SGNB",fontName="DSB",  fontSize=10, alignment=TA_CENTER, spaceAfter=0, leading=14)
-    IPO  = S("IPO", fontName="DSR",  fontSize=10, alignment=TA_RIGHT,  spaceAfter=4)
+    # fallback αν δεν υπάρχουν fonts
+    font_sans = "DSS" if "DSS" in pdfmetrics.getRegisteredFontNames() else "Helvetica"
+    font_sans_bold = "DSSB" if "DSSB" in pdfmetrics.getRegisteredFontNames() else "Helvetica-Bold"
+    font_serif = "DSR" if "DSR" in pdfmetrics.getRegisteredFontNames() else "Helvetica"
+    font_serif_bold = "DSB" if "DSB" in pdfmetrics.getRegisteredFontNames() else "Helvetica-Bold"
+
+    cnvy = colors.HexColor(NAVY)
+    cgold = colors.HexColor(GOLD)
+
+    def S(name, **kwargs):
+        return ParagraphStyle(name, **kwargs)
+
+    H1 = S("H1", fontName=font_sans_bold, fontSize=12, alignment=TA_CENTER, spaceAfter=2, leading=15)
+    H2 = S("H2", fontName=font_sans, fontSize=10, alignment=TA_CENTER, spaceAfter=2, leading=13)
+    LDG = S("LDG", fontName=font_sans_bold, fontSize=10, alignment=TA_CENTER, spaceAfter=6, leading=13)
+    TTL = S("TTL", fontName=font_sans_bold, fontSize=11, alignment=TA_CENTER, spaceAfter=2, spaceBefore=6, leading=15, textColor=cnvy)
+    HDA = S("HDA", fontName=font_sans_bold, fontSize=10, alignment=TA_LEFT, spaceAfter=4, leading=13)
+    BUL = S("BUL", fontName=font_serif, fontSize=10, alignment=TA_LEFT, leftIndent=20, spaceAfter=3, leading=14)
+    BOD = S("BOD", fontName=font_serif, fontSize=10, alignment=TA_JUSTIFY, spaceAfter=6, leading=15)
+    SML = S("SML", fontName=font_serif, fontSize=8, alignment=TA_CENTER, textColor=colors.grey, spaceAfter=2)
+    SGN = S("SGN", fontName=font_serif, fontSize=10, alignment=TA_CENTER, spaceAfter=0, leading=14)
+    SGNB = S("SGNB", fontName=font_serif_bold, fontSize=10, alignment=TA_CENTER, spaceAfter=0, leading=14)
+    IPO = S("IPO", fontName=font_serif, fontSize=10, alignment=TA_RIGHT, spaceAfter=4)
+
+    def xml_escape(text: str) -> str:
+        return (
+            str(text or "")
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
 
     story = []
 
-    # ── ΚΕΦΑΛΙΔΑ ──────────────────────────────────────────────
     story += [
         Paragraph("Ε∴Δ∴Τ∴Μ∴Α∴Τ∴Σ∴", H1),
-        Spacer(1, .15*cm),
+        Spacer(1, 0.15 * cm),
         Paragraph("Εν Ονόματι και Υπό την Αιγίδα", H2),
         Paragraph("της Μεγάλης Στοάς της Ελλάδος", H2),
         Paragraph("των Αρχαίων Ελευθέρων και Αποδεδεγμένων Τεκτόνων", H2),
-        Spacer(1, .1*cm),
-        Paragraph("Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ  υπ' αρ. 84       εν Αν∴Αθ∴", LDG),
-        HRFlowable(width="100%", thickness=1.5, color=CNVY, spaceAfter=8),
+        Spacer(1, 0.1 * cm),
+        Paragraph("Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ υπ' αρ. 84       εν Αν∴Αθ∴", LDG),
+        HRFlowable(width="100%", thickness=1.5, color=cnvy, spaceAfter=8),
     ]
 
-    # ── ΤΙΤΛΟΣ ────────────────────────────────────────────────
-    βαθμ = d.get("βαθμός_γενική","Μαθητού")
-    abbr = βαθμ[:3]  # Μαθ / Ετα / Διδ
-    ημερ = d.get("ημερομηνία","")
-    story.append(Paragraph(
-        f"Πρακτικόν Συνεδρίας της {ημερ} εις Βαθμ∴ {abbr}∴", TTL))
+    βαθμ = d.get("βαθμός_γενική", "Μαθητού") or "Μαθητού"
+    abbr = βαθμ[:3]
+    ημερ = d.get("ημερομηνία", "") or ""
 
-    # ── ΗΜΕΡΗΣΙΑ ΔΙΑΤΑΞΗ ──────────────────────────────────────
-    agenda = d.get("ημερησία_διάταξη", [])
+    story.append(Paragraph(f"Πρακτικόν Συνεδρίας της {xml_escape(ημερ)} εις Βαθμ∴ {xml_escape(abbr)}∴", TTL))
+
+    agenda = d.get("ημερησία_διάταξη", []) or []
     if agenda:
-        story.append(Spacer(1, .2*cm))
+        story.append(Spacer(1, 0.2 * cm))
         story.append(Paragraph("<b>Ημερησία Διάταξις:</b>", HDA))
         for item in agenda:
-            story.append(Paragraph(f"– {item}", BUL))
-        story.append(Spacer(1, .2*cm))
+            story.append(Paragraph(f"– {xml_escape(item)}", BUL))
+        story.append(Spacer(1, 0.2 * cm))
 
-    story.append(HRFlowable(width="100%", thickness=.5, color=CGOLD, spaceAfter=10))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=cgold, spaceAfter=10))
 
-    # ── ΣΩΜΑ ΠΡΑΚΤΙΚΩΝ ────────────────────────────────────────
-    body = d.get("κείμενο_πρακτικών","")
+    body = d.get("κείμενο_πρακτικών", "") or ""
     for para in body.split("\n\n"):
         para = para.strip()
         if not para:
             continue
-        lines = [l.strip() for l in para.split("\n") if l.strip()]
-        if lines and all(l[:1] in ("-","–","•","*") for l in lines):
-            for ln in lines:
-                story.append(Paragraph(f"   {ln}", BUL))
-        else:
-            story.append(Paragraph(para.replace("\n"," "), BOD))
 
-    # ── ΚΟΡΜΟΣ ────────────────────────────────────────────────
-    κορμ = d.get("κορμός_αγαθοεργίας", 0)
-    κολ  = d.get("κορμός_ολογράφως", "")
+        lines = [l.strip() for l in para.split("\n") if l.strip()]
+        if lines and all(l[:1] in ("-", "–", "•", "*") for l in lines):
+            for ln in lines:
+                story.append(Paragraph(f"{xml_escape(ln)}", BUL))
+        else:
+            story.append(Paragraph(xml_escape(para.replace("\n", " ")), BOD))
+
+    κορμ = float(d.get("κορμός_αγαθοεργίας", 0) or 0)
+    κολ = d.get("κορμός_ολογράφως", "") or ""
     if κορμ:
         story.append(Paragraph(
-            f"Εκ του Κορμού της Αγαθοεργίας εβλάστησαν "
-            f"<b>{κολ} ({κορμ:.2f})</b> όστρακα.", BOD))
+            f"Εκ του Κορμού της Αγαθοεργίας εβλάστησαν <b>{xml_escape(κολ)} ({κορμ:.2f})</b> όστρακα.",
+            BOD,
+        ))
 
-    # ── ΚΛΕΙΣΙΜΟ ──────────────────────────────────────────────
-    σεβ = d.get("σεβάσμιος","")
-    story += [
-        Spacer(1, .3*cm),
-        Paragraph(
+    σεβ = d.get("σεβάσμιος", "") or ""
+    if σεβ:
+        closing = (
             f"Τέλος, οι Εργασίες έκλεισαν κανονικώς υπό την Σφύραν "
-            f"του Σεβ∴ Διδ∴ <b>{σεβ}</b>, "
-            f"των Αδδ∴ της Σ∴ Στ∴ μας ευχαριστημένων και ικανοποιημένων.", BOD),
-        Spacer(1, .2*cm),
+            f"του Σεβ∴ Διδ∴ <b>{xml_escape(σεβ)}</b>, "
+            f"των Αδδ∴ της Σ∴ Στ∴ μας ευχαριστημένων και ικανοποιημένων."
+        )
+    else:
+        closing = "Τέλος, οι Εργασίες έκλεισαν κανονικώς."
+
+    story += [
+        Spacer(1, 0.3 * cm),
+        Paragraph(closing, BOD),
+        Spacer(1, 0.2 * cm),
         Paragraph("Είπον Σεβ∴ Διδ∴.", IPO),
-        Spacer(1, 1.5*cm),
+        Spacer(1, 1.5 * cm),
     ]
 
-    # ── ΥΠΟΓΡΑΦΕΣ (διάταξη υποδείγματος) ─────────────────────
-    γραμ = d.get("γραμματεύς","")
-    ρητ  = d.get("ρήτωρ","")
+    γραμ = d.get("γραμματεύς", "") or ""
+    ρητ = d.get("ρήτωρ", "") or ""
 
-    def sig_col(title, name):
-        return [Paragraph(title, SGN), Spacer(1,1.2*cm), Paragraph(name, SGNB)]
+    def sig_col(title: str, name: str):
+        return [Paragraph(title, SGN), Spacer(1, 1.2 * cm), Paragraph(xml_escape(name), SGNB)]
 
-    # Σεβάσμιος κεντρικά (πλήρες πλάτος)
-    story.append(Table([[sig_col("Ο Σεβ∴ Διδ∴", σεβ)]], colWidths=[14*cm],
-                       hAlign="CENTER"))
-    story.append(Spacer(1, .8*cm))
-    # Γραμματεύς αριστερά — Ρήτωρ δεξιά
+    story.append(Table([[sig_col("Ο Σεβ∴ Διδ∴", σεβ)]], colWidths=[14 * cm], hAlign="CENTER"))
+    story.append(Spacer(1, 0.8 * cm))
     story.append(Table(
         [[sig_col("Ο Γραμματεύς", γραμ), sig_col("Ο Ρήτωρ", ρητ)]],
-        colWidths=[7*cm, 7*cm], hAlign="CENTER"
+        colWidths=[7 * cm, 7 * cm],
+        hAlign="CENTER",
     ))
 
     story += [
-        Spacer(1, .6*cm),
-        HRFlowable(width="100%", thickness=.3, color=colors.lightgrey),
+        Spacer(1, 0.6 * cm),
+        HRFlowable(width="100%", thickness=0.3, color=colors.lightgrey),
         Paragraph(
-            f"Αρ. Πρωτ.: {d.get('αρ_πρωτ','')}  |  "
-            f"Ημερομηνία: {ημερ}  |  Βαθμ∴: {βαθμ}", SML),
+            f"Αρ. Πρωτ.: {xml_escape(d.get('αρ_πρωτ', ''))} | Ημερομηνία: {xml_escape(ημερ)} | Βαθμ∴: {xml_escape(βαθμ)}",
+            SML,
+        ),
     ]
 
     buf = io.BytesIO()
-    SimpleDocTemplate(buf, pagesize=A4,
-                      rightMargin=2.5*cm, leftMargin=2.5*cm,
-                      topMargin=2*cm, bottomMargin=2*cm,
-                      title="Πρακτικό Συνεδρίασης ΑΚΡΟΠΟΛΙΣ 84").build(story)
+    SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        rightMargin=2.5 * cm,
+        leftMargin=2.5 * cm,
+        topMargin=2 * cm,
+        bottomMargin=2 * cm,
+        title="Πρακτικό Συνεδρίασης ΑΚΡΟΠΟΛΙΣ 84",
+    ).build(story)
     buf.seek(0)
     return buf
-
 
 # ══════════════════════════════════════════════════════════════
 # EDITOR
@@ -461,258 +642,258 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
 def show_editor(r: dict) -> dict:
     st.markdown("---")
     st.markdown("## ✏️ Επεξεργασία Πρακτικού")
-    st.caption("Ελέγξτε και διορθώστε τα πεδία — το AI κάνει λάθη, εσείς τα διορθώνετε.")
+    st.caption("Ελέγξτε και διορθώστε τα πεδία. Το AI βοηθά, αλλά ο Γραμματεύς κάνει τον τελικό έλεγχο.")
 
     c1, c2, c3 = st.columns(3)
+
     with c1:
-        r["ημερομηνία"]        = st.text_input("Ημερομηνία (DD/MM/YYYY)", r.get("ημερομηνία",""))
-        r["ημέρα"]             = st.text_input("Ημέρα (π.χ. Τρίτην)", r.get("ημέρα",""))
-        r["βαθμός_γενική"]     = st.text_input("Βαθμός γενική (π.χ. Μαθητού)", r.get("βαθμός_γενική","Μαθητού"))
-        r["τόπος"]             = st.text_input("Τόπος", r.get("τόπος","τον Τεκτ∴ Ναόν Απόλλων"))
+        r["ημερομηνία"] = st.text_input("Ημερομηνία (DD/MM/YYYY)", r.get("ημερομηνία", ""))
+        r["ημέρα"] = st.text_input("Ημέρα", r.get("ημέρα", ""))
+        r["βαθμός_γενική"] = st.text_input("Βαθμός γενική", r.get("βαθμός_γενική", "Μαθητού"))
+        r["τόπος"] = st.text_input("Τόπος", r.get("τόπος", "τον Τεκτ∴ Ναόν"))
+
     with c2:
-        r["σεβάσμιος"]         = st.text_input("Σεβ∴ Διδ∴", r.get("σεβάσμιος",""))
-        r["γραμματεύς"]        = st.text_input("Γραμματεύς", r.get("γραμματεύς",""))
-        r["ρήτωρ"]             = st.text_input("Ρήτωρ", r.get("ρήτωρ",""))
-        r["αρ_πρωτ"]           = st.text_input("Αρ. Πρωτοκόλλου", r.get("αρ_πρωτ",""))
+        r["σεβάσμιος"] = st.text_input("Σεβ∴ Διδ∴", r.get("σεβάσμιος", ""))
+        r["γραμματεύς"] = st.text_input("Γραμματεύς", r.get("γραμματεύς", ""))
+        r["ρήτωρ"] = st.text_input("Ρήτωρ", r.get("ρήτωρ", ""))
+        r["αρ_πρωτ"] = st.text_input("Αρ. Πρωτοκόλλου", r.get("αρ_πρωτ", ""))
+
     with c3:
-        r["παρόντες_αριθμός"]  = st.number_input("Παρόντες (αριθμός)", 0, 200,
-                                                   int(r.get("παρόντες_αριθμός", 0)))
-        r["παρόντες_ολογράφως"]= st.text_input("Παρόντες (ολογράφως)",
-                                                r.get("παρόντες_ολογράφως",""))
-        r["κορμός_αγαθοεργίας"]= st.number_input("Κορμός (€)", 0.0, 99999.0,
-                                                   float(r.get("κορμός_αγαθοεργίας",0)),
-                                                   step=1.0, format="%.2f")
-        r["κορμός_ολογράφως"]  = st.text_input("Κορμός ολογράφως",
-                                                r.get("κορμός_ολογράφως",""))
+        r["παρόντες_αριθμός"] = st.number_input(
+            "Παρόντες (αριθμός)",
+            0,
+            300,
+            int(r.get("παρόντες_αριθμός", 0) or 0),
+        )
+        r["παρόντες_ολογράφως"] = st.text_input("Παρόντες (ολογράφως)", r.get("παρόντες_ολογράφως", ""))
+        r["κορμός_αγαθοεργίας"] = st.number_input(
+            "Κορμός (€)",
+            0.0,
+            99999.0,
+            float(r.get("κορμός_αγαθοεργίας", 0) or 0),
+            step=1.0,
+            format="%.2f",
+        )
+        r["κορμός_ολογράφως"] = st.text_input("Κορμός ολογράφως", r.get("κορμός_ολογράφως", ""))
 
     st.markdown("#### 📋 Ημερησία Διάταξη")
     agenda_raw = st.text_area(
         "Ένα θέμα ανά γραμμή:",
-        "\n".join(r.get("ημερησία_διάταξη",[])),
-        height=90, label_visibility="collapsed"
+        "\n".join(r.get("ημερησία_διάταξη", []) or []),
+        height=90,
+        label_visibility="collapsed",
     )
-    r["ημερησία_διάταξη"] = [l.strip() for l in agenda_raw.splitlines() if l.strip()]
+    r["ημερησία_διάταξη"] = [line.strip() for line in agenda_raw.splitlines() if line.strip()]
 
     st.markdown("#### 📄 Κείμενο Πρακτικών")
-    st.caption("Χωρίζετε παραγράφους με κενή γραμμή · Bullet lines ξεκινούν με –")
     r["κείμενο_πρακτικών"] = st.text_area(
-        "",
-        r.get("κείμενο_πρακτικών",""),
-        height=550, label_visibility="collapsed"
+        "Κείμενο Πρακτικών",
+        r.get("κείμενο_πρακτικών", ""),
+        height=550,
+        label_visibility="collapsed",
     )
+
     return r
 
-
 # ══════════════════════════════════════════════════════════════
-# TABS
+# UI
 # ══════════════════════════════════════════════════════════════
 tab_main, tab_help = st.tabs(["🎵 Ηχογράφηση → Πρακτικά", "ℹ️ Οδηγίες & Ρυθμίσεις"])
 
-# ════════════════════════════════════════
-# TAB 1 — ΚΥΡΙΑ ΛΕΙΤΟΥΡΓΙΑ
-# ════════════════════════════════════════
 with tab_main:
-
-    # ── ΒΗΜΑ 1: Στοιχεία ────────────────
     st.markdown("### Βήμα 1 · Στοιχεία Συνεδρίασης")
+
     ca, cb, cc = st.columns(3)
+
     with ca:
         sel_βαθμ = st.selectbox("Βαθμός", list(ΒΑΘΜΟΙ_GEN.keys()))
         sel_ημερ = st.date_input("Ημερομηνία", value=date.today())
-    with cb:
-        sel_σεβ  = st.text_input("Σεβ∴ Διδ∴", placeholder="Όνομα Επώνυμο")
-        sel_γραμ = st.text_input("Γραμματεύς", placeholder="Όνομα Επώνυμο")
-    with cc:
-        sel_ρητ   = st.text_input("Ρήτωρ", placeholder="Όνομα Επώνυμο")
-        sel_extra = st.text_area("Επιπλέον πλαίσιο για AI",
-                                 placeholder="π.χ. 14 παρόντες, ψηφοφορία για Αδ∴ Χ...",
-                                 height=68)
 
-    # ── ΒΗΜΑ 2: Αρχείο ──────────────────
+    with cb:
+        sel_σεβ = st.text_input("Σεβ∴ Διδ∴", placeholder="Όνομα Επώνυμο")
+        sel_γραμ = st.text_input("Γραμματεύς", placeholder="Όνομα Επώνυμο")
+
+    with cc:
+        sel_ρητ = st.text_input("Ρήτωρ", placeholder="Όνομα Επώνυμο")
+        sel_extra = st.text_area(
+            "Επιπλέον πλαίσιο για AI",
+            placeholder="π.χ. παρόντες, θέματα, ονόματα ομιλητών, ποσό κορμού κλπ.",
+            height=68,
+        )
+
     st.markdown("---")
     st.markdown("### Βήμα 2 · Αρχείο Ηχογράφησης")
 
     audio_file = st.file_uploader(
-        f"Ανεβάστε αρχείο (WAV, MP3, M4A, OGG — max {MAX_MB_RAW}MB)",
-        type=SUPPORTED
+        f"Ανεβάστε αρχείο ήχου ({', '.join(SUPPORTED)}) — max {MAX_MB_RAW}MB",
+        type=SUPPORTED,
     )
 
     if audio_file:
         raw_bytes = audio_file.getvalue()
-        size_mb   = len(raw_bytes) / (1024*1024)
-        ext       = audio_file.name.rsplit(".",1)[-1].lower()
+        size_mb = len(raw_bytes) / (1024 * 1024)
+        ext = audio_file.name.rsplit(".", 1)[-1].lower()
 
         st.audio(audio_file)
 
-        needs_compress = (size_mb > MAX_MB_SEND) or (ext == "wav")
+        if size_mb > MAX_MB_RAW:
+            st.error(f"⛔ Το αρχείο είναι {size_mb:.1f}MB και ξεπερνά το όριο {MAX_MB_RAW}MB.")
+        else:
+            st.success(f"✅ {audio_file.name} — {size_mb:.1f}MB — έτοιμο για μεταγραφή.")
+            st.session_state["ready_audio"] = raw_bytes
+            st.session_state["ready_ext"] = ext
+            st.session_state["ready_name"] = audio_file.name
 
-        col_info, col_btn = st.columns([3,1])
-        with col_info:
-            if size_mb > MAX_MB_RAW:
-                st.error(f"⛔ {size_mb:.1f}MB — Υπέρβαση ορίου {MAX_MB_RAW}MB. Χρησιμοποιήστε μικρότερο αρχείο.")
-                needs_compress = False
-            elif needs_compress:
-                st.warning(
-                    f"📦 **{size_mb:.1f}MB** — "
-                    f"{'WAV αρχείο · ' if ext=='wav' else 'Μεγάλο αρχείο · '}"
-                    f"Πατήστε **Συμπίεση** για μετατροπή σε MP3 128kbps πριν σταλεί στο AI."
-                )
-            else:
-                st.success(f"✅ {audio_file.name} — {size_mb:.1f}MB — Έτοιμο για αποστολή.")
-                st.session_state["ready_audio"] = raw_bytes
-                st.session_state["ready_ext"]   = ext
-
-        with col_btn:
-            if needs_compress and size_mb <= MAX_MB_RAW:
-                if st.button("🔄 Συμπίεση σε MP3", use_container_width=True, type="secondary"):
-                    with st.spinner(f"Συμπίεση {size_mb:.1f}MB…"):
-                        comp, msg, out_ext = compress_to_mp3(raw_bytes, ext)
-                    if comp is None:
-                        st.error(msg)
-                    else:
-                        comp_mb = len(comp)/(1024*1024)
-                        if msg:  # warning (fallback mode)
-                            st.warning(msg)
-                        else:
-                            st.success(f"✅ {size_mb:.1f}MB → {comp_mb:.1f}MB MP3")
-                        st.session_state["ready_audio"] = comp
-                        st.session_state["ready_ext"]   = out_ext
-                        st.rerun()
-
-        # Κουμπί λήψης MP3 αν έγινε συμπίεση
-        if (st.session_state.get("ready_ext") == "mp3" and ext == "wav"
-                and "ready_audio" in st.session_state):
-            st.download_button(
-                "⬇️ Λήψη συμπιεσμένου MP3",
-                data=st.session_state["ready_audio"],
-                file_name=audio_file.name.replace(".wav",".mp3"),
-                mime="audio/mpeg"
-            )
-
-    # ── ΒΗΜΑ 3: Μεταγραφή ───────────────
     st.markdown("---")
     st.markdown("### Βήμα 3 · Μεταγραφή & Σύνταξη Πρακτικών")
 
     ready = "ready_audio" in st.session_state
 
     if not ready:
-        st.info("📌 Ανεβάστε και (αν χρειαστεί) συμπιέστε αρχείο ηχογράφησης πρώτα.")
+        st.info("📌 Ανεβάστε πρώτα αρχείο ηχογράφησης.")
 
-    if st.button("🎧 Μεταγραφή & Σύνταξη μέσω Claude AI",
-                 type="primary", use_container_width=True, disabled=not ready):
-        ctx = (f"Βαθμός: {sel_βαθμ} | Ημερομηνία: {sel_ημερ} | "
-               f"Σεβ∴ Διδ∴: {sel_σεβ} | Γραμματεύς: {sel_γραμ} | Ρήτωρ: {sel_ρητ}\n{sel_extra}")
-
-        size_mb = len(st.session_state["ready_audio"]) / (1024*1024)
-        progress_bar  = st.progress(0)
-        status_text   = st.empty()
-
-        def progress_cb(pct, msg):
-            progress_bar.progress(pct)
-            status_text.info(msg)
-
-        progress_cb(2, f"🚀 Έναρξη επεξεργασίας {size_mb:.1f}MB αρχείου…")
-
-        result, err = call_claude_audio(
-            st.session_state["ready_audio"],
-            st.session_state["ready_ext"], ctx,
-            progress_cb=progress_cb
+    if st.button(
+        "🎧 Μεταγραφή & Σύνταξη Πρακτικών",
+        type="primary",
+        use_container_width=True,
+        disabled=not ready,
+    ):
+        ctx = (
+            f"Βαθμός: {sel_βαθμ}\n"
+            f"Βαθμός σε γενική: {ΒΑΘΜΟΙ_GEN[sel_βαθμ]}\n"
+            f"Ημερομηνία: {sel_ημερ.strftime('%d/%m/%Y')}\n"
+            f"Σεβ∴ Διδ∴: {sel_σεβ}\n"
+            f"Γραμματεύς: {sel_γραμ}\n"
+            f"Ρήτωρ: {sel_ρητ}\n"
+            f"Επιπλέον πληροφορίες: {sel_extra or '-'}"
         )
 
-        progress_bar.progress(100)
-        status_text.empty()
+        size_mb = len(st.session_state["ready_audio"]) / (1024 * 1024)
+        progress_bar = st.progress(0)
+        status_text = st.empty()
 
-        if err:
+        def progress_cb(pct: int, msg: str):
+            progress_bar.progress(min(max(int(pct), 0), 100))
+            status_text.info(msg)
+
+        progress_cb(1, f"🚀 Επεξεργασία αρχείου {size_mb:.1f}MB…")
+
+        result, err = process_audio_to_praktiko(
+            st.session_state["ready_audio"],
+            st.session_state["ready_ext"],
+            ctx,
+            progress_cb=progress_cb,
+        )
+
+        status_text.empty()
+        progress_bar.progress(100)
+
+        if err and not result:
             st.error(err)
         elif result:
-            # Γέμισμα από UI αν το AI δεν έβγαλε τιμές
-            for k, v in [("σεβάσμιος",sel_σεβ),("γραμματεύς",sel_γραμ),
-                          ("ρήτωρ",sel_ρητ)]:
-                if not result.get(k) and v: result[k] = v
+            if err:
+                st.warning(err)
+
+            for k, v in [
+                ("σεβάσμιος", sel_σεβ),
+                ("γραμματεύς", sel_γραμ),
+                ("ρήτωρ", sel_ρητ),
+            ]:
+                if not result.get(k) and v:
+                    result[k] = v
+
             if not result.get("βαθμός_γενική"):
                 result["βαθμός_γενική"] = ΒΑΘΜΟΙ_GEN[sel_βαθμ]
+
             if not result.get("ημερομηνία"):
                 result["ημερομηνία"] = sel_ημερ.strftime("%d/%m/%Y")
 
             st.session_state["praktiko"] = result
-            st.success("✅ Έτοιμο! Ελέγξτε και επεξεργαστείτε παρακάτω.")
+            st.success("✅ Έτοιμο. Ελέγξτε πρώτα την ακατέργαστη μεταγραφή και μετά τα πρακτικά.")
 
-    # ── RAW ΜΕΤΑΓΡΑΦΗ ───────────────────
     if "praktiko" in st.session_state:
-        raw_tr = st.session_state["praktiko"].get("μεταγραφή_λέξη_προς_λέξη","")
-        if raw_tr:
-            with st.expander("📄 Ακατέργαστη μεταγραφή (λέξη-προς-λέξη)", expanded=False):
-                st.text_area("", raw_tr, height=220, label_visibility="collapsed")
-                st.download_button("⬇️ .txt", raw_tr.encode("utf-8"),
-                                   f"μεταγραφή_{date.today()}.txt","text/plain")
+        raw_tr = st.session_state["praktiko"].get("μεταγραφή_λέξη_προς_λέξη", "")
 
-        # ── EDITOR ─────────────────────
+        if raw_tr:
+            with st.expander("📄 Ακατέργαστη μεταγραφή", expanded=False):
+                st.text_area(
+                    "Ακατέργαστη μεταγραφή",
+                    raw_tr,
+                    height=300,
+                    label_visibility="collapsed",
+                )
+                st.download_button(
+                    "⬇️ Λήψη μεταγραφής .txt",
+                    raw_tr.encode("utf-8"),
+                    f"μεταγραφή_{date.today()}.txt",
+                    "text/plain",
+                )
+
         edited = show_editor(st.session_state["praktiko"].copy())
 
-        # ── ΒΗΜΑ 4: PDF ────────────────
         st.markdown("---")
-        st.markdown("### Βήμα 4 · Εκτύπωση PDF")
+        st.markdown("### Βήμα 4 · Δημιουργία PDF")
+
         col_gen, col_dl = st.columns(2)
 
         with col_gen:
-            if st.button("📄 Δημιουργία PDF Πρακτικού",
-                         type="primary", use_container_width=True):
+            if st.button("📄 Δημιουργία PDF Πρακτικού", type="primary", use_container_width=True):
                 with st.spinner("Δημιουργία PDF…"):
                     pdf = generate_praktiko_pdf(edited)
                 st.session_state["pdf_bytes"] = pdf.getvalue()
-                st.session_state["pdf_label"] = edited.get("ημερομηνία","").replace("/","_")
-                st.success("✅ PDF έτοιμο!")
+                st.session_state["pdf_label"] = (edited.get("ημερομηνία", "") or str(date.today())).replace("/", "_")
+                st.success("✅ PDF έτοιμο.")
 
         with col_dl:
             if "pdf_bytes" in st.session_state:
                 st.download_button(
                     "⬇️ Λήψη PDF — Πρακτικό Συνεδρίασης",
                     data=st.session_state["pdf_bytes"],
-                    file_name=f"πρακτικό_{st.session_state.get('pdf_label',date.today())}.pdf",
+                    file_name=f"πρακτικό_{st.session_state.get('pdf_label', date.today())}.pdf",
                     mime="application/pdf",
-                    use_container_width=True
+                    use_container_width=True,
                 )
 
-# ════════════════════════════════════════
-# TAB 2 — ΟΔΗΓΙΕΣ
-# ════════════════════════════════════════
 with tab_help:
-    st.markdown(f"""
-    ## Ροή Εργασίας
-    1. Συμπληρώστε βαθμό, ημερομηνία, αξιωματικούς
-    2. Ανεβάστε ηχογράφηση (WAV ή MP3)
-    3. Αν εμφανιστεί "Συμπίεση" → πατήστε το (WAV ή > {MAX_MB_SEND}MB)
-    4. Πατήστε **Μεταγραφή & Σύνταξη**
-    5. Επεξεργαστείτε τα πεδία (ελέγξτε ονόματα, κορμό κλπ.)
-    6. **Δημιουργία PDF** → Λήψη → Εκτύπωση
+    st.markdown("""
+    ## Ροή εργασίας
 
-    ## Αρχεία που χρειάζονται ενημέρωση
+    1. Συμπληρώνετε βαθμό, ημερομηνία και αξιωματικούς.
+    2. Ανεβάζετε αρχείο ήχου.
+    3. Πατάτε **Μεταγραφή & Σύνταξη Πρακτικών**.
+    4. Ελέγχετε πρώτα την ακατέργαστη μεταγραφή.
+    5. Διορθώνετε το πρακτικό στον editor.
+    6. Δημιουργείτε PDF.
 
-    ### `requirements.txt` — προσθέστε:
+    ## Streamlit Secrets
+
+    Στο Streamlit Cloud → App Settings → Secrets:
+
+    ```toml
+    [AI]
+    OPENAI_API_KEY = "sk-..."
+    ANTHROPIC_API_KEY = "sk-ant-..."
     ```
+
+    ## requirements.txt
+
+    Βεβαιωθείτε ότι υπάρχουν:
+
+    ```txt
+    streamlit>=1.30
+    pandas>=2.0
+    plotly>=5.0
+    reportlab>=4.0
+    anthropic>=0.25
+    openai>=1.50.0
+    av
     pydub
     ```
 
-    ### `packages.txt` — δημιουργήστε αν δεν υπάρχει (στη ρίζα του repo):
-    ```
-    ffmpeg
-    ```
-    > Χωρίς ffmpeg η συμπίεση WAV→MP3 δεν λειτουργεί στο Streamlit Cloud.
+    ## Σημαντικές πρακτικές για καλύτερη μεταγραφή
 
-    ## Όρια αρχείων
-    | Μορφή | Ανά ώρα | Χωρίς συμπίεση |
-    |-------|---------|----------------|
-    | WAV 44.1kHz stereo | ~600MB | ❌ Πάντα συμπίεση |
-    | MP3 128kbps | ~60MB | ✅ < 20 λεπτά |
-    | MP3 256kbps | ~115MB | ⚠️ Συμπίεση αν > 20MB |
-    | M4A / OGG | ~50MB | ✅ Γενικά OK |
-
-    Για **2ωρη συνεδρίαση σε WAV**: WAV (~1.2GB) → MP3 128kbps (~120MB) → το API δέχεται έως 20MB,
-    άρα θα χρειαστεί να σπάσετε σε τμήματα ~20 λεπτών. Μελλοντική βελτίωση: αυτόματος διαχωρισμός.
-
-    ## Secrets (Streamlit Cloud → App Settings → Secrets)
-    ```toml
-    [AI]
-    ANTHROPIC_API_KEY = "sk-ant-..."
-    ```
+    - Το κινητό να είναι κοντά στους ομιλητές.
+    - Προτιμήστε m4a ή mp3.
+    - Μειώστε θόρυβο, μουσική, ψιθύρους και παράλληλες συζητήσεις.
+    - Στο πεδίο “Επιπλέον πλαίσιο” γράψτε ονόματα, θέματα και γνωστούς όρους.
     """)
