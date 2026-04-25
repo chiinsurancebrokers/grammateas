@@ -59,6 +59,10 @@ def generate_paradosi_pdf(data: dict) -> io.BytesIO:
     SML = S(fontName="DSS",  fontSize=8,   textColor=colors.grey, spaceAfter=3)
     ART = S(fontName="DSS",  fontSize=9,   textColor=colors.HexColor("#444444"),
             leftIndent=15, spaceAfter=4, leading=13)
+    # Styles για κελιά πινάκων (ώστε το κείμενο να αναδιπλώνεται)
+    TH  = S(fontName="DSSB", fontSize=7,  textColor=colors.white, alignment=TA_CENTER, leading=9, spaceAfter=0)
+    TD  = S(fontName="DSS",  fontSize=7,  leading=9, spaceAfter=0)
+    TDC = S(fontName="DSS",  fontSize=7,  alignment=TA_CENTER, leading=9, spaceAfter=0)
 
     def hr(): return HRFlowable(width="100%", thickness=.5, color=GOLD, spaceBefore=5, spaceAfter=5)
 
@@ -84,8 +88,14 @@ def generate_paradosi_pdf(data: dict) -> io.BytesIO:
     story.append(Spacer(1, .3*cm))
 
     # Εισαγωγική παράγραφος
-    ημερ_str = data["ημερομηνία"].strftime("%-dης/%m/%Y") if hasattr(data["ημερομηνία"],'strftime') else str(data["ημερομηνία"])
-    ημερ_full = data["ημερομηνία"].strftime("%-dη %B %Y") if hasattr(data["ημερομηνία"],'strftime') else str(data["ημερομηνία"])
+    ΜΗΝΕΣ = ["","Ιανουαρίου","Φεβρουαρίου","Μαρτίου","Απριλίου","Μαΐου","Ιουνίου",
+              "Ιουλίου","Αυγούστου","Σεπτεμβρίου","Οκτωβρίου","Νοεμβρίου","Δεκεμβρίου"]
+    d = data["ημερομηνία"]
+    if hasattr(d, 'strftime'):
+        ημερ_str  = f"{d.day}ης/{d.month:02d}/{d.year}"
+        ημερ_full = f"{d.day}η {ΜΗΝΕΣ[d.month]} {d.year}"
+    else:
+        ημερ_str = ημερ_full = str(d)
     ημερα = data.get("ημέρα","")
     story.append(Paragraph(
         f"Σήμερον {ημερα} {ημερ_full}, εις {data.get('τόπος','τα γραφεία της Στοάς, Αχαρνών 19, Αθήνα')}, "
@@ -124,23 +134,23 @@ def generate_paradosi_pdf(data: dict) -> io.BytesIO:
         ("36§11", "Βιβλίον Πρακτικών Συμβουλίου Αξιωματικών"),
     ]
 
-    tdata = [["Α/Α", "Άρθρο", "Βιβλίον", "Κατάσταση", "Παρατηρήσεις"]]
+    tdata = [[Paragraph("Α/Α",TH), Paragraph("Άρθρο",TH), Paragraph("Βιβλίον",TH),
+               Paragraph("Κατάσταση",TH), Paragraph("Παρατηρήσεις",TH)]]
     for i, (art, name) in enumerate(book_defs, 1):
         key = art
         bk = books.get(key, {})
         status = bk.get("κατάσταση", "Παραδόθηκε")
         notes  = bk.get("παρατηρήσεις", "")
-        tdata.append([str(i), art, name, status, notes])
+        tdata.append([Paragraph(str(i),TDC), Paragraph(art,TDC),
+                      Paragraph(name,TD), Paragraph(status,TD), Paragraph(notes,TD)])
 
     t = Table(tdata, colWidths=[.8*cm, 1.5*cm, 6.5*cm, 2.5*cm, 4.5*cm])
     t.setStyle(TableStyle([
-        ("BACKGROUND",   (0,0),(-1,0), NAVY), ("TEXTCOLOR",(0,0),(-1,0), WHITE),
-        ("FONTNAME",     (0,0),(-1,0), "DSSB"),
-        ("FONTSIZE",     (0,0),(-1,-1), 7), ("FONTNAME",(0,1),(-1,-1),"DSS"), ("LEADING",(0,0),(-1,-1),9),
+        ("BACKGROUND",   (0,0),(-1,0), NAVY),
         ("ROWBACKGROUNDS",(0,1),(-1,-1),[WHITE, LIGHT]),
         ("GRID",(0,0),(-1,-1),.25,colors.lightgrey), ("BOX",(0,0),(-1,-1),1,NAVY),
         ("BOTTOMPADDING",(0,0),(-1,-1),3), ("TOPPADDING",(0,0),(-1,-1),3),
-        ("VALIGN",(0,0),(-1,-1),"MIDDLE"),("WORDWRAP",(0,0),(-1,-1),"CJK"),
+        ("VALIGN",(0,0),(-1,-1),"TOP"),
     ]))
     story.append(t)
     story.append(Spacer(1,.4*cm))
@@ -159,16 +169,16 @@ def generate_paradosi_pdf(data: dict) -> io.BytesIO:
     sf_desc   = sfragida.get("περιγραφή", "Σφραγίς Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ υπ' αρ. 84 — Ελληνική")
 
     sf_data = [
-        ["Αντικείμενον", "Κατάστασις", "Παρατηρήσεις"],
-        [sf_desc, sf_status, sf_notes],
+        [Paragraph("Αντικείμενον",TH), Paragraph("Κατάστασις",TH), Paragraph("Παρατηρήσεις",TH)],
+        [Paragraph(sf_desc,TD), Paragraph(sf_status,TD), Paragraph(sf_notes,TD)],
     ]
     ts = Table(sf_data, colWidths=[7*cm, 3*cm, 6.5*cm])
     ts.setStyle(TableStyle([
-        ("BACKGROUND",(0,0),(-1,0),NAVY),("TEXTCOLOR",(0,0),(-1,0),WHITE),
-        ("FONTNAME",(0,0),(-1,0),"DSSB"),("FONTSIZE",(0,0),(-1,-1),8),
-        ("FONTNAME",(0,1),(-1,-1),"DSS"),("BACKGROUND",(0,1),(-1,-1),LIGHT),("LEADING",(0,0),(-1,-1),10),
+        ("BACKGROUND",(0,0),(-1,0),NAVY),
+        ("BACKGROUND",(0,1),(-1,-1),LIGHT),
         ("GRID",(0,0),(-1,-1),.25,colors.lightgrey),("BOX",(0,0),(-1,-1),1,NAVY),
-        ("BOTTOMPADDING",(0,0),(-1,-1),6),("TOPPADDING",(0,0),(-1,-1),6),
+        ("BOTTOMPADDING",(0,0),(-1,-1),5),("TOPPADDING",(0,0),(-1,-1),5),
+        ("VALIGN",(0,0),(-1,-1),"TOP"),
     ]))
     story.append(ts)
     story.append(Spacer(1,.3*cm))
@@ -179,17 +189,18 @@ def generate_paradosi_pdf(data: dict) -> io.BytesIO:
 
     grafikia = data.get("γραφική_ύλη", [])
     if grafikia:
-        gy_data = [["Α/Α", "Αντικείμενον", "Ποσότης/Κατάστασις", "Παρατηρήσεις"]]
+        gy_data = [[Paragraph("Α/Α",TH), Paragraph("Αντικείμενον",TH),
+                     Paragraph("Ποσότης/Κατάστασις",TH), Paragraph("Παρατηρήσεις",TH)]]
         for i, item in enumerate(grafikia, 1):
-            gy_data.append([str(i), item.get("είδος",""), item.get("κατάσταση",""), item.get("παρατηρήσεις","")])
+            gy_data.append([Paragraph(str(i),TDC), Paragraph(item.get("είδος",""),TD),
+                            Paragraph(item.get("κατάσταση",""),TD), Paragraph(item.get("παρατηρήσεις",""),TD)])
         tgy = Table(gy_data, colWidths=[.8*cm, 7*cm, 4*cm, 4.5*cm])
         tgy.setStyle(TableStyle([
-            ("BACKGROUND",(0,0),(-1,0),NAVY),("TEXTCOLOR",(0,0),(-1,0),WHITE),
-            ("FONTNAME",(0,0),(-1,0),"DSSB"),("FONTSIZE",(0,0),(-1,-1),8),
-            ("FONTNAME",(0,1),(-1,-1),"DSS"),("LEADING",(0,0),(-1,-1),10),
+            ("BACKGROUND",(0,0),(-1,0),NAVY),
             ("ROWBACKGROUNDS",(0,1),(-1,-1),[WHITE,LIGHT]),
             ("GRID",(0,0),(-1,-1),.25,colors.lightgrey),("BOX",(0,0),(-1,-1),1,NAVY),
             ("BOTTOMPADDING",(0,0),(-1,-1),4),("TOPPADDING",(0,0),(-1,-1),4),
+            ("VALIGN",(0,0),(-1,-1),"TOP"),
         ]))
         story.append(tgy)
     else:
