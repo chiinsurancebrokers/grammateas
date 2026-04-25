@@ -168,25 +168,36 @@ def _split_into_chunks(audio_bytes: bytes, ext: str) -> list[bytes]:
         return [audio_bytes]  # χωρίς av, στείλε ολόκληρο (θα αποτύχει αν μεγάλο)
 
 
-def _transcribe_chunk(client, chunk: bytes, chunk_idx: int, total: int) -> str:
-    """Μεταγράφει ένα μόνο chunk — επιστρέφει plain text."""
-    b64 = base64.standard_b64encode(chunk).decode()
+def get_openai_key():
     try:
-        msg = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=4000,
-            messages=[{"role":"user","content":[
-                {"type":"text","text":(
-                    f"Αυτό είναι το τμήμα {chunk_idx+1}/{total} ηχογράφησης Τεκτονικής Συνεδρίασης. "
-                    "Κάνε αναλυτική μεταγραφή λέξη-προς-λέξη στα ελληνικά. "
-                    "Επέστρεψε ΜΟΝΟ το κείμενο μεταγραφής, χωρίς επεξηγήσεις."
-                )},
-                {"type":"audio","source":{"type":"base64","media_type":"audio/mpeg","data":b64}}
-            ]}]
+        return (st.secrets.get("AI",{}).get("OPENAI_API_KEY") or
+                st.secrets.get("OPENAI_API_KEY",""))
+    except Exception:
+        return ""
+
+
+def _transcribe_chunk(chunk: bytes, chunk_idx: int, total: int) -> str:
+    """Μεταγράφει chunk μέσω OpenAI Whisper API."""
+    openai_key = get_openai_key()
+    if not openai_key:
+        return f"[❌ Chunk {chunk_idx+1}: Δεν βρέθηκε OPENAI_API_KEY στα Secrets]"
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=openai_key)
+        # Whisper δέχεται file-like object με όνομα
+        audio_file = io.BytesIO(chunk)
+        audio_file.name = "chunk.mp3"
+        result = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file,
+            language="el",          # Ελληνικά
+            response_format="text"
         )
-        return msg.content[0].text if msg.content else ""
+        return str(result).strip()
+    except ImportError:
+        return f"[❌ Chunk {chunk_idx+1}: Προσθέστε 'openai' στο requirements.txt]"
     except Exception as e:
-        return f"[Σφάλμα chunk {chunk_idx+1}: {e}]"
+        return f"[❌ Chunk {chunk_idx+1}: {e}]"
 
 
 def _format_into_praktiko(client, transcript: str, context: str) -> tuple:
@@ -264,32 +275,14 @@ def call_claude_audio(audio_bytes: bytes, ext: str, context: str,
 
     size_mb = len(audio_bytes) / (1024 * 1024)
 
-    # ── Αν χωράει σε ένα call, στείλε κατευθείαν ──────────────
+    # ── Αν χωράει σε ένα call → Whisper + Claude ──────────────
     if len(audio_bytes) <= MAX_CHUNK_BYTES:
-        media_type = MIME_MAP.get(ext, "audio/mpeg")
-        b64 = base64.standard_b64encode(audio_bytes).decode()
-        try:
-            msg = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=8000,
-                system="""Είσαι Γραμματεύς-Σφραγιδοφύλαξ ΜΣΤΕ. Μεταγράψε και σύνταξε Πρακτικά.
-Επέστρεψε ΜΟΝΟ JSON (χωρίς backticks) με πεδία:
-μεταγραφή_λέξη_προς_λέξη, ημερομηνία, ημέρα, βαθμός_γενική, τόπος, σεβάσμιος,
-παρόντες_αριθμός, παρόντες_ολογράφως, ημερησία_διάταξη, κείμενο_πρακτικών,
-αποφάσεις, κορμός_αγαθοεργίας, κορμός_ολογράφως, γραμματεύς, ρήτωρ""",
-                messages=[{"role":"user","content":[
-                    {"type":"text","text":f"Πλαίσιο: {context}. Κάνε μεταγραφή και πρακτικά ΜΣΤΕ."},
-                    {"type":"audio","source":{"type":"base64","media_type":media_type,"data":b64}}
-                ]}]
-            )
-            raw   = msg.content[0].text if msg.content else ""
-            clean = re.sub(r"^```[a-z]*\n?","",raw.strip())
-            clean = re.sub(r"\n?```$","",clean.strip())
-            return json.loads(clean), None
-        except json.JSONDecodeError:
-            return {"μεταγραφή_λέξη_προς_λέξη":raw,"κείμενο_πρακτικών":raw}, None
-        except Exception as e:
-            return None, f"❌ Σφάλμα API: {e}"
+        if progress_cb:
+            progress_cb(10, "🎧 Μεταγραφή μέσω Whisper…")
+        transcript = _transcribe_chunk(audio_bytes, 0, 1)
+        if progress_cb:
+            progress_cb(60, "📝 Σύνταξη Πρακτικών…")
+        return _format_into_praktiko(client, transcript, context)
 
     # ── Μεγάλο αρχείο → κατάτμηση ─────────────────────────────
     if progress_cb:
@@ -307,7 +300,7 @@ def call_claude_audio(audio_bytes: bytes, ext: str, context: str,
         if progress_cb:
             pct = 10 + int(70 * i / n)
             progress_cb(pct, f"🎧 Μεταγραφή chunk {i+1}/{n}…")
-        text = _transcribe_chunk(client, chunk, i, n)
+        text = _transcribe_chunk(chunk, i, n)
         transcripts.append(f"=== Chunk {i+1}/{n} ===\n{text}")
 
     full_transcript = "\n\n".join(transcripts)
