@@ -1,19 +1,22 @@
 # -*- coding: utf-8 -*-
 """
-Σελίδα 18 — Πρόσκληση Εργασιών Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ 84
+Σελίδα 18 — Πρόσκληση Εργασιών Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ 84 — Luxury Mode
 
 Δημιουργεί PNG πρόσκληση με:
+- luxury parchment background
 - καθαρό ασπρόμαυρο κορυμβωτό πλαίσιο
-- φωτογραφία Ακρόπολης χωρίς τα κάτω γράμματα
+- εσωτερικό premium πλαίσιο
+- μεγάλη καθαρή φωτογραφία Ακρόπολης με elegant frame
 - σωστή υποστήριξη του τεκτονικού συμβόλου ∴ με DejaVu Sans
-- σφραγίδα/κεντρικό έμβλημα ανάμεσα στον Σεβάσμιο και τον Γραμματέα
-- editable ημερήσια διάταξη, ομιλητή, θέμα, επόμενες συνεδρίες
+- σφραγίδα της Στοάς ανάμεσα στον Σεβάσμιο και τον Γραμματέα
+- μικρή σφραγίδα/δαφνινο στεφάνι ως bullet στην ημερήσια διάταξη
+- editable ημερήσια διάταξη, ομιλητής, θέμα, επόμενες συνεδρίες
 
-Τοποθετήστε προαιρετικά assets:
+Προτεινόμενα assets:
 assets/acropolis-photo.jpg
-assets/symbol_top.png              # απλό σύμβολο για πάνω δεξιά
-assets/symbol_center.png           # δαφνοστεφές σύμβολο μεταξύ υπογραφών
-assets/symbol_corner.png           # μαύρο τετράγωνο για γωνίες
+assets/symbol_top.png
+assets/symbol_center.png     # Σφραγίδα / δαφνινο στεφάνι της Στοάς
+assets/symbol_corner.png
 
 requirements.txt:
 Pillow
@@ -24,10 +27,11 @@ sys.path.append("..")
 
 import io
 import os
+import random
 from typing import List, Tuple, Optional
 
 import streamlit as st
-from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageOps
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageOps, ImageEnhance
 
 try:
     from modules.database import init_db
@@ -42,18 +46,21 @@ st.set_page_config(page_title="Πρόσκληση Εργασιών", page_icon="
 # ══════════════════════════════════════════════════════════════
 PAGE_W, PAGE_H = 1240, 1800
 NAVY = (18, 26, 63)
+NAVY_SOFT = (29, 39, 78)
 GOLD = (155, 130, 77)
+GOLD_DARK = (120, 96, 52)
 BLACK = (5, 5, 5)
 WHITE = (255, 255, 255)
 OFFWHITE = (250, 249, 246)
-LIGHT_LINE = (205, 205, 205)
+PARCHMENT = (248, 244, 235)
+PARCHMENT_DARK = (226, 215, 190)
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FONTS = os.path.join(BASE, "fonts")
 ASSETS = os.path.join(BASE, "assets")
 
 # ══════════════════════════════════════════════════════════════
-# ΓΡΑΜΜΑΤΟΣΕΙΡΕΣ — DejaVu Sans για να εμφανίζεται σωστά το ∴
+# ΓΡΑΜΜΑΤΟΣΕΙΡΕΣ — DejaVu Sans για σωστό ∴
 # ══════════════════════════════════════════════════════════════
 def _fp(name: str) -> Optional[str]:
     path = os.path.join(FONTS, name)
@@ -61,7 +68,7 @@ def _fp(name: str) -> Optional[str]:
 
 
 def font(size: int, bold: bool = False, italic: bool = False) -> ImageFont.ImageFont:
-    """DejaVu Sans by default. Υποστηρίζει το ∴, σε αντίθεση με αρκετά Serif fonts."""
+    """DejaVu Sans by default. Υποστηρίζει σωστά το ∴."""
     if bold:
         path = _fp("DejaVuSans-Bold.ttf") or _fp("DejaVuSerif-Bold.ttf")
     elif italic:
@@ -74,12 +81,12 @@ def font(size: int, bold: bool = False, italic: bool = False) -> ImageFont.Image
 # TEXT HELPERS
 # ══════════════════════════════════════════════════════════════
 def tw(draw: ImageDraw.ImageDraw, text: str, fnt: ImageFont.ImageFont) -> int:
-    b = draw.textbbox((0, 0), text, font=fnt)
+    b = draw.textbbox((0, 0), str(text), font=fnt)
     return b[2] - b[0]
 
 
 def th(draw: ImageDraw.ImageDraw, text: str, fnt: ImageFont.ImageFont) -> int:
-    b = draw.textbbox((0, 0), text, font=fnt)
+    b = draw.textbbox((0, 0), str(text), font=fnt)
     return b[3] - b[1]
 
 
@@ -125,7 +132,7 @@ def left(draw: ImageDraw.ImageDraw, x: int, y: int, text: str, fnt: ImageFont.Im
     return y
 
 # ══════════════════════════════════════════════════════════════
-# IMAGE / ASSET HELPERS
+# ASSET HELPERS
 # ══════════════════════════════════════════════════════════════
 def load_asset(name: str) -> Optional[bytes]:
     path = os.path.join(ASSETS, name)
@@ -135,8 +142,17 @@ def load_asset(name: str) -> Optional[bytes]:
     return None
 
 
-def paste_asset(img: Image.Image, asset_bytes: Optional[bytes], x: int, y: int, max_w: int, max_h: int,
-                monochrome: bool = False, invert: bool = False) -> bool:
+def paste_asset(
+    img: Image.Image,
+    asset_bytes: Optional[bytes],
+    x: int,
+    y: int,
+    max_w: int,
+    max_h: int,
+    monochrome: bool = False,
+    invert: bool = False,
+    opacity: float = 1.0,
+) -> bool:
     if not asset_bytes:
         return False
     try:
@@ -146,6 +162,10 @@ def paste_asset(img: Image.Image, asset_bytes: Optional[bytes], x: int, y: int, 
             if invert:
                 gray = ImageOps.invert(gray)
             icon = Image.merge("RGBA", (gray, gray, gray, icon.getchannel("A")))
+        if opacity < 1.0:
+            a = icon.getchannel("A")
+            a = a.point(lambda p: int(p * opacity))
+            icon.putalpha(a)
         icon.thumbnail((max_w, max_h), Image.LANCZOS)
         px = x + (max_w - icon.width) // 2
         py = y + (max_h - icon.height) // 2
@@ -155,13 +175,36 @@ def paste_asset(img: Image.Image, asset_bytes: Optional[bytes], x: int, y: int, 
         return False
 
 # ══════════════════════════════════════════════════════════════
-# ΣΥΜΒΟΛΑ FALLBACK
+# LUXURY BACKGROUND
+# ══════════════════════════════════════════════════════════════
+def create_luxury_background() -> Image.Image:
+    """Δημιουργεί ελαφρύ parchment / luxury paper background."""
+    bg = Image.new("RGBA", (PAGE_W, PAGE_H), PARCHMENT + (255,))
+    pix = bg.load()
+    random.seed(84)
+    for _ in range(12000):
+        x = random.randrange(0, PAGE_W)
+        y = random.randrange(0, PAGE_H)
+        delta = random.randrange(-7, 8)
+        r = max(0, min(255, PARCHMENT[0] + delta))
+        g = max(0, min(255, PARCHMENT[1] + delta))
+        b = max(0, min(255, PARCHMENT[2] + delta))
+        pix[x, y] = (r, g, b, 255)
+
+    # subtle center glow
+    overlay = Image.new("RGBA", (PAGE_W, PAGE_H), (255, 255, 255, 0))
+    od = ImageDraw.Draw(overlay)
+    od.ellipse((-250, 120, PAGE_W + 250, PAGE_H - 80), fill=(255, 255, 255, 48))
+    overlay = overlay.filter(ImageFilter.GaussianBlur(90))
+    bg.alpha_composite(overlay)
+    return bg
+
+# ══════════════════════════════════════════════════════════════
+# FALLBACK SYMBOLS (χρησιμοποιούνται ΜΟΝΟ για corners/top)
 # ══════════════════════════════════════════════════════════════
 def draw_sq_compass(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color=WHITE, show_g: bool = True) -> None:
     s = size
     lw = max(2, s // 9)
-
-    # Διαβήτης
     top = (cx, cy - int(s * 0.78))
     left_foot = (cx - int(s * 0.65), cy + int(s * 0.62))
     right_foot = (cx + int(s * 0.65), cy + int(s * 0.62))
@@ -169,29 +212,26 @@ def draw_sq_compass(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, colo
     draw.line([top, right_foot], fill=color, width=lw)
     draw.ellipse([top[0] - lw, top[1] - lw, top[0] + lw, top[1] + lw], fill=color)
 
-    # Γωνία
     arm = int(s * 0.86)
     y0 = cy + int(s * 0.38)
     draw.line([(cx - arm // 2, y0), (cx, cy - int(s * 0.08)), (cx + arm // 2, y0)], fill=color, width=lw)
     draw.line([(cx - arm // 2, y0), (cx + arm // 2, y0)], fill=color, width=lw)
 
-    # G
     if show_g:
         f = font(max(12, int(s * 0.45)), bold=True)
         center_at(draw, cx, cy - int(s * 0.12), "G", f, color)
 
 
 def draw_wreath_symbol(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color=NAVY) -> None:
-    # Απλό fallback δαφνοστεφές σύμβολο, αν δεν υπάρχει asset symbol_center.png
     import math
     s = size
     for side in [-1, 1]:
-        for i in range(10):
-            angle = math.radians(105 + i * 13 if side == -1 else 75 - i * 13)
-            px = cx + int(side * (s * 0.75) * math.cos(angle))
-            py = cy + int((s * 0.95) * math.sin(angle))
+        for i in range(12):
+            angle = math.radians(110 + i * 11 if side == -1 else 70 - i * 11)
+            px = cx + int(side * (s * 0.78) * math.cos(angle))
+            py = cy + int((s * 0.92) * math.sin(angle))
             draw.ellipse([px - 5, py - 3, px + 5, py + 3], outline=color, width=2)
-    draw_sq_compass(draw, cx, cy, int(s * 0.7), color)
+    draw_sq_compass(draw, cx, cy, int(s * 0.68), color)
 
 # ══════════════════════════════════════════════════════════════
 # ΔΙΑΚΟΣΜΗΤΙΚΑ
@@ -205,12 +245,27 @@ def rule(draw: ImageDraw.ImageDraw, y: int, x1: int, x2: int, color=NAVY) -> Non
 
 def ornament(draw: ImageDraw.ImageDraw, y: int, x1: int, x2: int, color=NAVY) -> None:
     cx = (x1 + x2) // 2
-    draw.line([(x1, y), (cx - 36, y)], fill=color, width=2)
-    draw.line([(cx + 36, y), (x2, y)], fill=color, width=2)
-    for off in [-24, 0, 24]:
-        ds = 5 if off else 7
+    draw.line([(x1, y), (cx - 46, y)], fill=color, width=2)
+    draw.line([(cx + 46, y), (x2, y)], fill=color, width=2)
+    for off in [-34, -15, 15, 34]:
         ox = cx + off
+        ds = 5
         draw.polygon([(ox, y - ds), (ox + ds * 2, y), (ox, y + ds), (ox - ds * 2, y)], outline=color, width=2)
+
+
+def luxury_section_label(draw: ImageDraw.ImageDraw, y: int, text: str, fnt: ImageFont.ImageFont) -> int:
+    """Luxury cartouche για section title."""
+    w = tw(draw, text, fnt) + 70
+    h = th(draw, text, fnt) + 22
+    x1 = (PAGE_W - w) // 2
+    y1 = y - 8
+    x2 = x1 + w
+    y2 = y1 + h
+    draw.rounded_rectangle([x1, y1, x2, y2], radius=4, fill=(252, 250, 244), outline=NAVY, width=1)
+    draw.line([(x1 - 150, y1 + h // 2), (x1 - 15, y1 + h // 2)], fill=GOLD_DARK, width=1)
+    draw.line([(x2 + 15, y1 + h // 2), (x2 + 150, y1 + h // 2)], fill=GOLD_DARK, width=1)
+    center_at(draw, PAGE_W // 2, y, text, fnt, NAVY)
+    return y2 + 12
 
 # ══════════════════════════════════════════════════════════════
 # ΠΛΑΙΣΙΟ
@@ -218,17 +273,11 @@ def ornament(draw: ImageDraw.ImageDraw, y: int, x1: int, x2: int, color=NAVY) ->
 def draw_diamond_border(img: Image.Image, corner_bytes: Optional[bytes] = None) -> None:
     draw = ImageDraw.Draw(img)
     W, H = PAGE_W, PAGE_H
-
     draw.rectangle([0, 0, W - 1, H - 1], fill=BLACK)
 
     corner = 92
-    border_w = 78
-    inner = corner
+    draw.rectangle([corner, corner, W - corner, H - corner], fill=PARCHMENT)
 
-    # καθαρό εσωτερικό
-    draw.rectangle([inner, inner, W - inner, H - inner], fill=OFFWHITE)
-
-    # ρόμβοι πάνω/κάτω
     ds = 30
     step = ds * 2
 
@@ -246,7 +295,6 @@ def draw_diamond_border(img: Image.Image, corner_bytes: Optional[bytes] = None) 
         x += step
         idx += 1
 
-    # ρόμβοι αριστερά/δεξιά
     y = corner + ds
     idx = 0
     while y <= H - corner - ds:
@@ -258,39 +306,36 @@ def draw_diamond_border(img: Image.Image, corner_bytes: Optional[bytes] = None) 
         y += step
         idx += 1
 
-    # γωνίες με asset ή fallback
     for gx, gy in [(0, 0), (W - corner, 0), (0, H - corner), (W - corner, H - corner)]:
         draw.rectangle([gx, gy, gx + corner, gy + corner], fill=BLACK, outline=WHITE, width=2)
-        if not paste_asset(img, corner_bytes, gx + 8, gy + 8, corner - 16, corner - 16):
-            draw_sq_compass(draw, gx + corner // 2, gy + corner // 2, 34, WHITE)
+        if not paste_asset(img, corner_bytes, gx + 11, gy + 11, corner - 22, corner - 22):
+            draw_sq_compass(draw, gx + corner // 2, gy + corner // 2, 32, WHITE)
 
-    # εσωτερικό διπλό πλαίσιο
     m = 112
-    draw.rectangle([m, m, W - m, H - m], outline=BLACK, width=4)
-    draw.rectangle([m + 9, m + 9, W - m - 9, H - m - 9], outline=NAVY, width=2)
+    draw.rectangle([m, m, W - m, H - m], outline=BLACK, width=5)
+    draw.rectangle([m + 10, m + 10, W - m - 10, H - m - 10], outline=NAVY, width=2)
+    draw.rectangle([m + 18, m + 18, W - m - 18, H - m - 18], outline=(206, 190, 150), width=1)
+
+    # corner ticks inside
+    t = 24
+    for x1, y1, sx, sy in [(m + 22, m + 22, 1, 1), (W - m - 22, m + 22, -1, 1), (m + 22, H - m - 22, 1, -1), (W - m - 22, H - m - 22, -1, -1)]:
+        draw.line([(x1, y1), (x1 + sx * t, y1)], fill=NAVY, width=2)
+        draw.line([(x1, y1), (x1, y1 + sy * t)], fill=NAVY, width=2)
 
 # ══════════════════════════════════════════════════════════════
 # ΦΩΤΟΓΡΑΦΙΑ ΑΚΡΟΠΟΛΗΣ
 # ══════════════════════════════════════════════════════════════
 def process_acropolis(photo_bytes: bytes, box_w: int, box_h: int) -> Image.Image:
-    """
-    Φορτώνει τη φωτογραφία Ακρόπολης, αφαιρεί την κάτω λωρίδα με γράμματα,
-    την κάνει καθαρή B&W, αυξάνει contrast/sharpness και εφαρμόζει πολύ διακριτικό fade.
-    """
-    from PIL import ImageEnhance
-
     photo = Image.open(io.BytesIO(photo_bytes)).convert("L")
     pw, ph = photo.size
 
-    # Αφαίρεση κάτω λωρίδας με γράμματα/υπογραφή.
-    # Κόβουμε λίγο πιο επιθετικά για να μη μένουν traces από caption.
+    # Αφαίρεση κάτω caption/υπογραφής.
     photo = photo.crop((0, 0, pw, int(ph * 0.81)))
     pw, ph = photo.size
 
     target_ratio = box_w / box_h
     src_ratio = pw / ph
 
-    # Cover crop με στόχο να κρατήσει Παρθενώνα + Λυκαβηττό.
     if src_ratio > target_ratio:
         new_w = int(ph * target_ratio)
         left = max(0, (pw - new_w) // 2)
@@ -302,23 +347,22 @@ def process_acropolis(photo_bytes: bytes, box_w: int, box_h: int) -> Image.Image
 
     photo = photo.resize((box_w, box_h), Image.LANCZOS)
     photo = ImageOps.autocontrast(photo, cutoff=1)
-    photo = ImageEnhance.Contrast(photo).enhance(1.18)
-    photo = ImageEnhance.Sharpness(photo).enhance(1.25)
+    photo = ImageEnhance.Contrast(photo).enhance(1.20)
+    photo = ImageEnhance.Sharpness(photo).enhance(1.30)
 
     rgba = photo.convert("RGBA")
 
-    # Μαλακές άκρες, όχι υπερβολικό fade ώστε να μένει καθαρή.
     mask = Image.new("L", (box_w, box_h), 0)
     md = ImageDraw.Draw(mask)
     md.rounded_rectangle([0, 0, box_w, box_h], radius=18, fill=255)
-    mask = mask.filter(ImageFilter.GaussianBlur(8))
+    mask = mask.filter(ImageFilter.GaussianBlur(5))
 
-    # Πολύ διακριτικό κάτω fade για να δένει με τον τίτλο.
+    # soft bottom fade, not too strong
     alpha = mask.copy()
-    fade_start = int(box_h * 0.84)
+    fade_start = int(box_h * 0.88)
     for yy in range(fade_start, box_h):
         t = (yy - fade_start) / max(1, box_h - fade_start)
-        val = int(255 * (1 - 0.35 * t))
+        val = int(255 * (1 - 0.28 * t))
         for xx in range(box_w):
             alpha.putpixel((xx, yy), min(alpha.getpixel((xx, yy)), val))
 
@@ -327,17 +371,17 @@ def process_acropolis(photo_bytes: bytes, box_w: int, box_h: int) -> Image.Image
 
 
 def draw_photo_frame(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int) -> None:
-    """Κομψό εσωτερικό πλαίσιο γύρω από τη φωτογραφία, όπως σε επίσημη πρόσκληση."""
-    pad = 10
+    """Luxury frame γύρω από τη φωτογραφία."""
+    pad = 13
     outer = [x - pad, y - pad, x + w + pad, y + h + pad]
-    inner = [x - 3, y - 3, x + w + 3, y + h + 3]
+    mount = [x - 7, y - 7, x + w + 7, y + h + 7]
+    inner = [x - 2, y - 2, x + w + 2, y + h + 2]
 
-    # λευκό mount / passe-partout
-    draw.rounded_rectangle(outer, radius=14, fill=WHITE, outline=NAVY, width=2)
-    draw.rounded_rectangle(inner, radius=10, outline=BLACK, width=2)
+    draw.rounded_rectangle(outer, radius=16, fill=(255, 254, 249), outline=NAVY, width=2)
+    draw.rounded_rectangle(mount, radius=12, outline=GOLD_DARK, width=2)
+    draw.rounded_rectangle(inner, radius=8, outline=BLACK, width=2)
 
-    # μικρές γωνιακές λεπτομέρειες
-    c = 26
+    c = 28
     for sx, sy in [(outer[0], outer[1]), (outer[2], outer[1]), (outer[0], outer[3]), (outer[2], outer[3])]:
         if sx == outer[0] and sy == outer[1]:
             draw.line([(sx, sy + c), (sx, sy), (sx + c, sy)], fill=NAVY, width=2)
@@ -366,57 +410,56 @@ def create_invitation(
     symbol_top_bytes: Optional[bytes] = None,
     symbol_center_bytes: Optional[bytes] = None,
     symbol_corner_bytes: Optional[bytes] = None,
+    seal_bytes: Optional[bytes] = None,
 ) -> bytes:
-    img = Image.new("RGBA", (PAGE_W, PAGE_H), WHITE + (255,))
+    img = create_luxury_background()
     draw_diamond_border(img, corner_bytes=symbol_corner_bytes)
     draw = ImageDraw.Draw(img)
 
     INNER_X = 150
     TEXT_W = PAGE_W - INNER_X * 2
 
-    # Fonts
+    # Fonts compact luxury
     f_top = font(40, bold=True)
-    f_header = font(25)
-    f_lodge = font(29, bold=True)
+    f_header = font(24)
+    f_lodge = font(28, bold=True)
     f_title = font(48, bold=True)
-    f_body = font(24)
-    f_body_b = font(24, bold=True)
-    f_section = font(24, bold=True)
-    f_agenda = font(21, bold=True)
-    f_small = font(19)
-    f_small_b = font(19, bold=True)
-    f_sig = font(20)
+    f_body = font(23)
+    f_body_b = font(23, bold=True)
+    f_section = font(23, bold=True)
+    f_agenda = font(20, bold=True)
+    f_small = font(18)
+    f_small_b = font(18, bold=True)
+    f_sig = font(19)
     f_sig_name = font(16, bold=True)
     f_next = font(18)
 
-    # 1. Header
+    # Header
     y = 126
-    y = center(draw, y, "Ε∴ Δ∴ Τ∴ Μ∴ Α∴ Τ∴ Σ∴", f_top, NAVY, lsp=10)
-    y = center(draw, y, "Εν Ονόματι και Υπό την Αιγίδα", f_header, NAVY, lsp=4)
-    y = center(draw, y, "της Μεγάλης Στοάς της Ελλάδος", f_header, NAVY, lsp=4)
-    y = center(draw, y, "των Αρχαίων Ελευθέρων και Αποδεδεγμένων Τεκτόνων", f_header, NAVY, max_w=TEXT_W, lsp=12)
-    ornament(draw, y + 8, x1=475, x2=765)
-    y += 30
+    y = center(draw, y, "Ε∴ Δ∴ Τ∴ Μ∴ Α∴ Τ∴ Σ∴", f_top, NAVY, lsp=8)
+    y = center(draw, y, "Εν Ονόματι και Υπό την Αιγίδα", f_header, NAVY, lsp=3)
+    y = center(draw, y, "της Μεγάλης Στοάς της Ελλάδος", f_header, NAVY, lsp=3)
+    y = center(draw, y, "των Αρχαίων Ελευθέρων και Αποδεδεγμένων Τεκτόνων", f_header, NAVY, max_w=TEXT_W, lsp=10)
+    ornament(draw, y + 7, x1=475, x2=765)
+    y += 27
 
-    y = center(draw, y, "Σ∴ Στ∴ «ΑΚΡΟΠΟΛΙΣ» υπ’ αριθμόν 84", f_lodge, NAVY, lsp=7)
+    y = center(draw, y, "Σ∴ Στ∴ «ΑΚΡΟΠΟΛΙΣ» υπ' αριθμόν 84", f_lodge, NAVY, lsp=6)
     y = center(draw, y, "εν Αν∴ Αθηνών", f_lodge, NAVY, lsp=18)
 
-    # Top right symbol only — no seal at top
+    # Top right symbol — optional asset
     if symbol_top_bytes:
-        paste_asset(img, symbol_top_bytes, PAGE_W - INNER_X - 80, 150, 96, 96, monochrome=False)
+        paste_asset(img, symbol_top_bytes, PAGE_W - INNER_X - 78, 150, 92, 92)
     else:
-        draw_sq_compass(draw, PAGE_W - INNER_X - 25, 205, 46, NAVY)
+        draw_sq_compass(draw, PAGE_W - INNER_X - 25, 205, 44, NAVY)
 
-    # 2. Photo
-    photo_x = INNER_X - 30
-    photo_y = y + 8
+    # Photo
+    photo_x = INNER_X - 42
+    photo_y = y + 10
     photo_w = PAGE_W - photo_x * 2
-    photo_h = 360
-
+    photo_h = 365
     raw_photo = photo_bytes or load_asset("acropolis-photo.jpg")
-    # Κομψό πλαίσιο φωτογραφίας πρώτα, μετά η εικόνα από πάνω.
-    draw_photo_frame(draw, photo_x, photo_y, photo_w, photo_h)
 
+    draw_photo_frame(draw, photo_x, photo_y, photo_w, photo_h)
     if raw_photo:
         try:
             ph_img = process_acropolis(raw_photo, photo_w, photo_h)
@@ -427,102 +470,106 @@ def create_invitation(
         draw.rounded_rectangle([photo_x, photo_y, photo_x + photo_w, photo_y + photo_h], radius=10, fill=(220, 220, 220, 255))
 
     draw = ImageDraw.Draw(img)
-    y = photo_y + photo_h + 30
+    y = photo_y + photo_h + 34
 
-    # 3. Title
-    y = center(draw, y, "ΠΡΟΣΚΛΗΣΗ ΣΕ ΕΡΓΑΣΙΕΣ", f_title, NAVY, lsp=4)
-    ornament(draw, y + 4, x1=420, x2=820)
-    y += 26
+    # ── FIX #2: Τίτλος με σωστό breathing space ──────────────────
+    y = center(draw, y, "ΠΡΟΣΚΛΗΣΗ ΣΕ ΕΡΓΑΣΙΕΣ", f_title, NAVY, lsp=6)
+    y += 8                                        # ← extra κενό πριν το ornament
+    ornament(draw, y + 6, x1=420, x2=820)
+    y += 28
+    # ─────────────────────────────────────────────────────────────
 
-    # 4. Meeting details
-    y = center(draw, y, f"Την {meeting_date} και ώρα {meeting_time},", f_body_b, NAVY, max_w=TEXT_W, lsp=7)
-    y = center(draw, y, "θα πραγματοποιηθούν οι Εργασίες της Σεπτής Στοάς μας", f_body, NAVY, max_w=TEXT_W, lsp=7)
-    y = center(draw, y, f"εις Βαθμόν {degree},", f_body, NAVY, max_w=TEXT_W, lsp=12)
+    # Meeting details
+    y = center(draw, y, f"Την {meeting_date} και ώρα {meeting_time},", f_body_b, NAVY, max_w=TEXT_W, lsp=6)
+    y = center(draw, y, "θα πραγματοποιηθούν οι Εργασίες της Σεπτής Στοάς μας", f_body, NAVY, max_w=TEXT_W, lsp=6)
+    y = center(draw, y, f"εις Βαθμόν {degree},", f_body, NAVY, max_w=TEXT_W, lsp=9)
     y = center(draw, y, venue, f_body, NAVY, max_w=TEXT_W, lsp=10)
 
-    rule(draw, y + 4, x1=330, x2=910)
-    y += 18
+    y += 2
+    y = luxury_section_label(draw, y, "ΗΜΕΡΗΣΙΑ ΔΙΑΤΑΞΙΣ", f_section)
 
-    # 5. Agenda
-    y = center(draw, y, "ΗΜΕΡΗΣΙΑ ΔΙΑΤΑΞΙΣ", f_section, NAVY, lsp=14)
+    # ── FIX #3: Agenda bullets — πάντα symbol_center_bytes ───────
     bullet_x = INNER_X + 70
     text_x = bullet_x + 48
-
     for item in agenda_items:
-        draw_sq_compass(draw, bullet_x, y + 10, 11, GOLD, show_g=False)
-        y = left(draw, text_x, y, item.upper(), f_agenda, NAVY, max_w=TEXT_W - 80, lsp=5)
+        if symbol_center_bytes:
+            paste_asset(img, symbol_center_bytes, bullet_x - 12, y - 2, 28, 28, opacity=0.92)
+        else:
+            draw_wreath_symbol(draw, bullet_x, y + 10, 16, GOLD_DARK)
+        y = left(draw, text_x, y, item.upper(), f_agenda, NAVY, max_w=TEXT_W - 80, lsp=4)
         y += 1
+    # ─────────────────────────────────────────────────────────────
 
     y += 4
 
-    # 6. Speaker / Topic
+    # Speaker / Topic
     if speaker.strip():
         y = center(draw, y, f"Ομιλητής: {speaker.strip()}", f_small, NAVY, max_w=TEXT_W, lsp=5)
     else:
         y = center(draw, y, "Ομιλητής: ________________________________", f_small, NAVY, lsp=5)
 
     if topic.strip():
-        y = center(draw, y, f"Θέμα: «{topic.strip()}»", f_small, NAVY, max_w=TEXT_W, lsp=8)
+        y = center(draw, y, f"Θέμα: «{topic.strip()}»", f_small, NAVY, max_w=TEXT_W, lsp=7)
     else:
-        y = center(draw, y, "Θέμα: «__________________________________»", f_small, NAVY, lsp=8)
+        y = center(draw, y, "Θέμα: «__________________________________»", f_small, NAVY, lsp=7)
 
     ornament(draw, y + 3, x1=480, x2=760)
     y += 20
 
-    # 7. Closing
+    # Closing
     para = (
         "Η παρουσία σας θα λαμπρύνει τις Εργασίες της Στοάς μας και θα αποτελέσει "
         "ιδιαίτερη χαρά και τιμή για το Πλήρωμα του Εργαστηρίου μας και τον "
         "Αδελφό Σεβάσμιο ιδιαιτέρως."
     )
     y = center(draw, y, para, f_small, NAVY, max_w=TEXT_W, lsp=4)
-    y += 2
-    y = center(draw, y, "Μετά το πέρας των Εργασιών θα ακολουθήσει Ποτήριον Αγάπης.", f_small, NAVY, max_w=TEXT_W, lsp=6)
+    y += 1
+    y = center(draw, y, "Μετά το πέρας των Εργασιών θα ακολουθήσει Ποτήριον Αγάπης.", f_small, NAVY, max_w=TEXT_W, lsp=5)
     y = center(draw, y, "Με τον τριπλό αδελφικό ασπασμό,", f_small, NAVY, lsp=12)
 
-    # 8. Signatures — central symbol between them
+    # ── FIX #4: Signatures με καλύτερο spacing ────────────────────
     sig_y = y + 4
     sig_lx = INNER_X + 170
     sig_rx = PAGE_W - INNER_X - 170
     center_at(draw, sig_lx, sig_y, "Ο Σεβάσμιος", f_sig, NAVY)
     center_at(draw, sig_rx, sig_y, "Ο Γραμματεύς", f_sig, NAVY)
 
-    line_y = sig_y + 58
-    draw.line([(sig_lx - 125, line_y), (sig_lx + 125, line_y)], fill=NAVY, width=2)
-    draw.line([(sig_rx - 125, line_y), (sig_rx + 125, line_y)], fill=NAVY, width=2)
+    line_y = sig_y + 64                          # ← από 58/62 → 64 για πιο clean spacing
+    draw.line([(sig_lx - 130, line_y), (sig_lx + 130, line_y)], fill=NAVY, width=2)
+    draw.line([(sig_rx - 130, line_y), (sig_rx + 130, line_y)], fill=NAVY, width=2)
 
     if master.strip():
         center_at(draw, sig_lx, line_y + 8, master.strip().upper(), f_sig_name, NAVY)
     if secretary.strip():
         center_at(draw, sig_rx, line_y + 8, secretary.strip().upper(), f_sig_name, NAVY)
+    # ─────────────────────────────────────────────────────────────
 
-    # Σφραγίδα / κεντρικό σύμβολο εδώ, όχι επάνω
-    symbol_box_w, symbol_box_h = 155, 125
+    # ── FIX #1: Κεντρική σφραγίδα — ΠΑΝΤΑ akropolis-seal.png ───
+    symbol_box_w, symbol_box_h = 175, 135
     symbol_x = (PAGE_W - symbol_box_w) // 2
-    symbol_y = sig_y + 6
-    if symbol_center_bytes:
-        paste_asset(img, symbol_center_bytes, symbol_x, symbol_y, symbol_box_w, symbol_box_h)
-    else:
-        draw_wreath_symbol(draw, PAGE_W // 2, symbol_y + 64, 68, NAVY)
+    symbol_y = sig_y + 3
+    # Χρησιμοποιεί αποκλειστικά το akropolis-seal.png
+    paste_asset(img, seal_bytes, symbol_x, symbol_y, symbol_box_w, symbol_box_h)
+    # ─────────────────────────────────────────────────────────────
 
-    y = line_y + 64
+    y = line_y + 82
     if master.strip() or secretary.strip():
-        y += 18
+        y += 12
 
-    # 9. Next Sessions box
-    box_x1 = INNER_X - 10
-    box_x2 = PAGE_W - INNER_X + 10
-    # Σταθερή θέση ώστε οι επόμενες συνεδρίες να μένουν εντός του εσωτερικού πλαισίου.
-    box_y1 = min(max(y + 18, 1548), PAGE_H - 265)
-    box_h = 52 + len(next_sessions[:4]) * 30 + 18
-    box_y2 = min(box_y1 + box_h, PAGE_H - 150)
+    # Next sessions box — fixed inside frame
+    box_x1 = INNER_X - 18
+    box_x2 = PAGE_W - INNER_X + 18
+    box_y1 = min(max(y + 12, 1540), PAGE_H - 265)
+    box_h = 54 + len(next_sessions[:4]) * 30 + 20
+    box_y2 = min(box_y1 + box_h, PAGE_H - 145)
 
-    draw.rounded_rectangle([box_x1, box_y1, box_x2, box_y2], radius=10, outline=BLACK, width=2, fill=WHITE)
-    draw.rounded_rectangle([box_x1 + 4, box_y1 + 4, box_x2 - 4, box_y2 - 4], radius=8, outline=NAVY, width=1)
+    draw.rounded_rectangle([box_x1, box_y1, box_x2, box_y2], radius=12, outline=BLACK, width=2, fill=(255, 254, 249))
+    draw.rounded_rectangle([box_x1 + 5, box_y1 + 5, box_x2 - 5, box_y2 - 5], radius=10, outline=NAVY, width=1)
+    draw.rounded_rectangle([box_x1 + 9, box_y1 + 9, box_x2 - 9, box_y2 - 9], radius=8, outline=(206, 190, 150), width=1)
 
     header_y = box_y1 + 14
     center_at(draw, PAGE_W // 2, header_y, "ΕΠΟΜΕΝΕΣ ΣΥΝΕΔΡΙΕΣ", font(22, bold=True), NAVY)
-    rule(draw, header_y + 32, x1=box_x1 + 115, x2=box_x2 - 115)
+    rule(draw, header_y + 32, x1=box_x1 + 110, x2=box_x2 - 110)
 
     row_y = header_y + 42
     for dt, deg in next_sessions[:4]:
@@ -533,8 +580,8 @@ def create_invitation(
         draw.text((box_x1 + 515, row_y), f"Βαθμός: {deg}", font=f_next, fill=NAVY)
         row_y += 30
 
-    if box_y2 + 24 < PAGE_H - 118:
-        ornament(draw, box_y2 + 22, x1=480, x2=760)
+    if box_y2 + 22 < PAGE_H - 118:
+        ornament(draw, box_y2 + 20, x1=480, x2=760)
 
     # Export
     out = Image.new("RGB", (PAGE_W, PAGE_H), WHITE)
@@ -548,13 +595,13 @@ def create_invitation(
 # STREAMLIT UI
 # ══════════════════════════════════════════════════════════════
 st.markdown("# 🖼️ Πρόσκληση Εργασιών — Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ 84")
-st.caption("Συμπληρώνετε τα στοιχεία και δημιουργείται πρόσκληση PNG έτοιμη για αποστολή ή εκτύπωση.")
+st.caption("Luxury mode · Συμπληρώνετε τα στοιχεία και δημιουργείται πρόσκληση PNG έτοιμη για αποστολή ή εκτύπωση.")
 
 with st.sidebar:
     st.markdown("## 📎 Assets")
     photo_up = st.file_uploader("Φωτογραφία Ακρόπολης", type=["jpg", "jpeg", "png"])
     symbol_top_up = st.file_uploader("Σύμβολο επάνω δεξιά", type=["jpg", "jpeg", "png"], key="top_symbol")
-    symbol_center_up = st.file_uploader("Κεντρικό σύμβολο μεταξύ υπογραφών", type=["jpg", "jpeg", "png"], key="center_symbol")
+    symbol_center_up = st.file_uploader("Σφραγίδα Ακρόπολης / κεντρικό σύμβολο", type=["jpg", "jpeg", "png"], key="center_symbol")
     symbol_corner_up = st.file_uploader("Σύμβολο γωνιών", type=["jpg", "jpeg", "png"], key="corner_symbol")
     st.caption("Αν δεν ανεβάσετε, χρησιμοποιούνται όσα υπάρχουν στον φάκελο assets/.")
 
@@ -603,11 +650,12 @@ if nd2.strip():
 photo_bytes = photo_up.getvalue() if photo_up else load_asset("acropolis-photo.jpg")
 symbol_top_bytes = symbol_top_up.getvalue() if symbol_top_up else load_asset("symbol_top.png")
 symbol_center_bytes = symbol_center_up.getvalue() if symbol_center_up else load_asset("symbol_center.png")
+seal_bytes = load_asset("akropolis-seal.png")
 symbol_corner_bytes = symbol_corner_up.getvalue() if symbol_corner_up else load_asset("symbol_corner.png")
 
 st.markdown("---")
 if st.button("🎨 Δημιουργία Πρόσκλησης PNG", type="primary", use_container_width=True):
-    with st.spinner("Δημιουργία εικόνας…"):
+    with st.spinner("Δημιουργία luxury πρόσκλησης…"):
         png = create_invitation(
             meeting_date=meeting_date,
             meeting_time=meeting_time,
@@ -623,6 +671,7 @@ if st.button("🎨 Δημιουργία Πρόσκλησης PNG", type="primary
             symbol_top_bytes=symbol_top_bytes,
             symbol_center_bytes=symbol_center_bytes,
             symbol_corner_bytes=symbol_corner_bytes,
+            seal_bytes=seal_bytes,
         )
     st.session_state["inv_png"] = png
     st.success("✅ Έτοιμο!")
@@ -632,7 +681,7 @@ if "inv_png" in st.session_state:
     st.download_button(
         "⬇️ Λήψη PNG",
         data=st.session_state["inv_png"],
-        file_name="prosklisi_akropolis_84.png",
+        file_name="prosklisi_akropolis_84_luxury.png",
         mime="image/png",
         use_container_width=True,
     )
@@ -644,11 +693,15 @@ with st.expander("ℹ️ Οδηγίες assets"):
     ```txt
     assets/acropolis-photo.jpg
     assets/symbol_top.png
-    assets/symbol_center.png
+    assets/symbol_center.png   ← PNG transparent, min 800×800
     assets/symbol_corner.png
     ```
 
-    Το `symbol_center.png` είναι το βασικό σύμβολο/σφραγίδα που θα μπει ανάμεσα στον Σεβάσμιο και τον Γραμματέα.
-    """)
+    Το `symbol_center.png` χρησιμοποιείται:
+    - **ανάμεσα** στον Σεβάσμιο και τον Γραμματέα (κεντρική σφραγίδα)
+    - **ως bullet** στην Ημερήσια Διάταξη
 
+    ⚠️ Αν δεν υπάρχει `symbol_center.png`, η κεντρική σφραγίδα **παραλείπεται** (δεν σχεδιάζεται fallback).
+    Για τέλεια ποιότητα: PNG με **διαφανές φόντο**, τουλάχιστον **800×800 px**.
+    """)
 
