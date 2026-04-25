@@ -5,4 +5,4 @@ reportlab>=4.0
 anthropic>=0.25
 pydub
 av
-openai
+openai>=1.50.0
