@@ -6,3 +6,4 @@ anthropic>=0.25
 pydub
 av
 openai>=1.50.0
+Pillow
