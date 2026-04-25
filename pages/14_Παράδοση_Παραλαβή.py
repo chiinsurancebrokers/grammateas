@@ -25,23 +25,39 @@ def generate_paradosi_pdf(data: dict) -> io.BytesIO:
     from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
     from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
                                      Table, TableStyle, HRFlowable, KeepTogether)
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    import os
+
+    # ── Καταχώρηση DejaVu γραμματοσειρών (πλήρης υποστήριξη ελληνικών) ──
+    _fonts_base = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts")
+    for alias, fn in {
+        "DSR":  "DejaVuSerif.ttf",
+        "DSB":  "DejaVuSerif-Bold.ttf",
+        "DSI":  "DejaVuSerif-Italic.ttf",
+        "DSBI": "DejaVuSerif-BoldItalic.ttf",
+        "DSS":  "DejaVuSans.ttf",
+        "DSSB": "DejaVuSans-Bold.ttf",
+    }.items():
+        if alias not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(TTFont(alias, os.path.join(_fonts_base, fn)))
 
     NAVY = colors.HexColor("#1a2a4a"); GOLD = colors.HexColor("#b8960c")
     LIGHT = colors.HexColor("#f5f5f0"); WHITE = colors.white; BLACK = colors.black
 
     def S(**kw):
-        defaults = dict(fontName="Helvetica", fontSize=10, spaceAfter=5, leading=14)
+        defaults = dict(fontName="DSR", fontSize=10, spaceAfter=5, leading=14)
         defaults.update(kw)
         return ParagraphStyle(str(hash(str(kw))), **defaults)
 
-    CB  = S(fontName="Helvetica-Bold", fontSize=10,  alignment=TA_CENTER, spaceAfter=3)
-    CC  = S(fontName="Helvetica",      fontSize=10,  alignment=TA_CENTER, spaceAfter=3)
-    TIT = S(fontName="Helvetica-Bold", fontSize=13,  alignment=TA_CENTER, spaceAfter=8, spaceBefore=6)
-    BOD = S(fontName="Helvetica",      fontSize=10,  alignment=TA_JUSTIFY, spaceAfter=8, leading=15)
-    BLD = S(fontName="Helvetica-Bold", fontSize=10,  spaceAfter=4)
-    IND = S(fontName="Helvetica",      fontSize=10,  leftIndent=25, spaceAfter=5, leading=14, alignment=TA_JUSTIFY)
-    SML = S(fontName="Helvetica",      fontSize=8,   textColor=colors.grey, spaceAfter=3)
-    ART = S(fontName="Helvetica-Oblique", fontSize=9, textColor=colors.HexColor("#444444"),
+    CB  = S(fontName="DSB",  fontSize=10,  alignment=TA_CENTER, spaceAfter=3)
+    CC  = S(fontName="DSR",  fontSize=10,  alignment=TA_CENTER, spaceAfter=3)
+    TIT = S(fontName="DSB",  fontSize=13,  alignment=TA_CENTER, spaceAfter=8, spaceBefore=6)
+    BOD = S(fontName="DSR",  fontSize=10,  alignment=TA_JUSTIFY, spaceAfter=8, leading=15)
+    BLD = S(fontName="DSB",  fontSize=10,  spaceAfter=4)
+    IND = S(fontName="DSR",  fontSize=10,  leftIndent=25, spaceAfter=5, leading=14, alignment=TA_JUSTIFY)
+    SML = S(fontName="DSR",  fontSize=8,   textColor=colors.grey, spaceAfter=3)
+    ART = S(fontName="DSI",  fontSize=9,   textColor=colors.HexColor("#444444"),
             leftIndent=15, spaceAfter=4, leading=13)
 
     def hr(): return HRFlowable(width="100%", thickness=.5, color=GOLD, spaceBefore=5, spaceAfter=5)
@@ -119,8 +135,8 @@ def generate_paradosi_pdf(data: dict) -> io.BytesIO:
     t = Table(tdata, colWidths=[.8*cm, 1.5*cm, 6.5*cm, 2.5*cm, 4.5*cm])
     t.setStyle(TableStyle([
         ("BACKGROUND",   (0,0),(-1,0), NAVY), ("TEXTCOLOR",(0,0),(-1,0), WHITE),
-        ("FONTNAME",     (0,0),(-1,0), "Helvetica-Bold"),
-        ("FONTSIZE",     (0,0),(-1,-1), 8), ("FONTNAME",(0,1),(-1,-1),"Helvetica"),
+        ("FONTNAME",     (0,0),(-1,0), "DSB"),
+        ("FONTSIZE",     (0,0),(-1,-1), 8), ("FONTNAME",(0,1),(-1,-1),"DSR"),
         ("ROWBACKGROUNDS",(0,1),(-1,-1),[WHITE, LIGHT]),
         ("GRID",(0,0),(-1,-1),.25,colors.lightgrey), ("BOX",(0,0),(-1,-1),1,NAVY),
         ("BOTTOMPADDING",(0,0),(-1,-1),4), ("TOPPADDING",(0,0),(-1,-1),4),
@@ -149,8 +165,8 @@ def generate_paradosi_pdf(data: dict) -> io.BytesIO:
     ts = Table(sf_data, colWidths=[7*cm, 3*cm, 6.5*cm])
     ts.setStyle(TableStyle([
         ("BACKGROUND",(0,0),(-1,0),NAVY),("TEXTCOLOR",(0,0),(-1,0),WHITE),
-        ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),("FONTSIZE",(0,0),(-1,-1),9),
-        ("FONTNAME",(0,1),(-1,-1),"Helvetica"),("BACKGROUND",(0,1),(-1,-1),LIGHT),
+        ("FONTNAME",(0,0),(-1,0),"DSB"),("FONTSIZE",(0,0),(-1,-1),9),
+        ("FONTNAME",(0,1),(-1,-1),"DSR"),("BACKGROUND",(0,1),(-1,-1),LIGHT),
         ("GRID",(0,0),(-1,-1),.25,colors.lightgrey),("BOX",(0,0),(-1,-1),1,NAVY),
         ("BOTTOMPADDING",(0,0),(-1,-1),6),("TOPPADDING",(0,0),(-1,-1),6),
     ]))
@@ -169,8 +185,8 @@ def generate_paradosi_pdf(data: dict) -> io.BytesIO:
         tgy = Table(gy_data, colWidths=[.8*cm, 7*cm, 4*cm, 4.5*cm])
         tgy.setStyle(TableStyle([
             ("BACKGROUND",(0,0),(-1,0),NAVY),("TEXTCOLOR",(0,0),(-1,0),WHITE),
-            ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),("FONTSIZE",(0,0),(-1,-1),9),
-            ("FONTNAME",(0,1),(-1,-1),"Helvetica"),
+            ("FONTNAME",(0,0),(-1,0),"DSB"),("FONTSIZE",(0,0),(-1,-1),9),
+            ("FONTNAME",(0,1),(-1,-1),"DSR"),
             ("ROWBACKGROUNDS",(0,1),(-1,-1),[WHITE,LIGHT]),
             ("GRID",(0,0),(-1,-1),.25,colors.lightgrey),("BOX",(0,0),(-1,-1),1,NAVY),
             ("BOTTOMPADDING",(0,0),(-1,-1),4),("TOPPADDING",(0,0),(-1,-1),4),
