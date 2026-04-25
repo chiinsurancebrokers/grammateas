@@ -47,7 +47,7 @@ WHITE = "#ffffff"
 LIGHT_BG = "#fbfaf7"
 
 PAGE_W = 1240
-PAGE_H = 1754
+PAGE_H = 1800
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FONT_DIR = os.path.join(BASE_DIR, "fonts")
@@ -67,12 +67,15 @@ def font_path(*names: str) -> str | None:
 
 
 def get_font(size: int, bold: bool = False, italic: bool = False):
+    # IMPORTANT:
+    # Χρησιμοποιούμε DejaVu Sans γιατί υποστηρίζει το τεκτονικό σύμβολο ∴.
+    # Το DejaVu Serif συχνά το αφήνει κενό, άρα φαίνεται σαν "Σ Στ" αντί για "Σ∴ Στ∴".
     if bold:
-        path = font_path("DejaVuSerif-Bold.ttf", "DejaVuSans-Bold.ttf")
+        path = font_path("DejaVuSans-Bold.ttf", "DejaVuSerif-Bold.ttf")
     elif italic:
-        path = font_path("DejaVuSerif-Italic.ttf", "DejaVuSans-Oblique.ttf")
+        path = font_path("DejaVuSans-Oblique.ttf", "DejaVuSerif-Italic.ttf")
     else:
-        path = font_path("DejaVuSerif.ttf", "DejaVuSans.ttf")
+        path = font_path("DejaVuSans.ttf", "DejaVuSerif.ttf")
 
     if path:
         return ImageFont.truetype(path, size=size)
@@ -156,37 +159,36 @@ def draw_rule(draw, y: int, x1=250, x2=990, fill=NAVY):
 def draw_checker_border(img: Image.Image):
     draw = ImageDraw.Draw(img)
 
-    # outer black background frame
-    draw.rectangle((0, 0, PAGE_W - 1, PAGE_H - 1), outline=BLACK, width=8)
+    # Καθαρό εξωτερικό πλαίσιο
+    draw.rectangle((0, 0, PAGE_W - 1, PAGE_H - 1), outline=BLACK, width=6)
 
-    margin = 30
-    border = 54
-    square = 28
+    margin = 42
+    border = 34
+    step = 32
 
-    # checker background strips
-    # top & bottom
-    for x in range(margin, PAGE_W - margin, square):
-        idx = (x - margin) // square
-        fill = BLACK if idx % 2 == 0 else WHITE
-        pts_top = [(x, margin), (x + square // 2, margin + border // 2), (x + square, margin), (x + square // 2, margin - border // 2)]
-        pts_bot = [(x, PAGE_H - margin), (x + square // 2, PAGE_H - margin - border // 2), (x + square, PAGE_H - margin), (x + square // 2, PAGE_H - margin + border // 2)]
+    # Κορυμβωτό ασπρόμαυρο μοτίβο — πιο αραιό και καθαρό
+    for x in range(margin + 20, PAGE_W - margin - 20, step):
+        i = (x - margin) // step
+        fill = BLACK if i % 2 == 0 else WHITE
+        pts_top = [(x, 18), (x + 16, 18 + border), (x + 32, 18), (x + 16, 18 - border)]
+        pts_bottom = [(x, PAGE_H - 18), (x + 16, PAGE_H - 18 - border), (x + 32, PAGE_H - 18), (x + 16, PAGE_H - 18 + border)]
         draw.polygon(pts_top, fill=fill, outline=BLACK)
-        draw.polygon(pts_bot, fill=fill, outline=BLACK)
+        draw.polygon(pts_bottom, fill=fill, outline=BLACK)
 
-    # left & right
-    for y in range(margin, PAGE_H - margin, square):
-        idx = (y - margin) // square
-        fill = BLACK if idx % 2 == 0 else WHITE
-        pts_left = [(margin, y), (margin + border // 2, y + square // 2), (margin, y + square), (margin - border // 2, y + square // 2)]
-        pts_right = [(PAGE_W - margin, y), (PAGE_W - margin - border // 2, y + square // 2), (PAGE_W - margin, y + square), (PAGE_W - margin + border // 2, y + square // 2)]
+    for y in range(margin + 20, PAGE_H - margin - 20, step):
+        i = (y - margin) // step
+        fill = BLACK if i % 2 == 0 else WHITE
+        pts_left = [(18, y), (18 + border, y + 16), (18, y + 32), (18 - border, y + 16)]
+        pts_right = [(PAGE_W - 18, y), (PAGE_W - 18 - border, y + 16), (PAGE_W - 18, y + 32), (PAGE_W - 18 + border, y + 16)]
         draw.polygon(pts_left, fill=fill, outline=BLACK)
         draw.polygon(pts_right, fill=fill, outline=BLACK)
 
-    # inner content frame
-    draw.rectangle((88, 72, PAGE_W - 88, PAGE_H - 72), outline=BLACK, width=5)
-    draw.rectangle((104, 88, PAGE_W - 104, PAGE_H - 88), outline=NAVY, width=2)
+    # Λευκό εσωτερικό πεδίο και διπλό πλαίσιο
+    draw.rectangle((96, 86, PAGE_W - 96, PAGE_H - 86), fill=LIGHT_BG)
+    draw.rectangle((96, 86, PAGE_W - 96, PAGE_H - 86), outline=BLACK, width=4)
+    draw.rectangle((114, 104, PAGE_W - 114, PAGE_H - 104), outline=NAVY, width=2)
 
-    # corner boxes
+    # Corner symbols
     box = 92
     for x, y in [(8, 8), (PAGE_W - box - 8, 8), (8, PAGE_H - box - 8), (PAGE_W - box - 8, PAGE_H - box - 8)]:
         draw.rectangle((x, y, x + box, y + box), fill=BLACK, outline=WHITE, width=2)
@@ -258,7 +260,7 @@ def add_acropolis_photo(img: Image.Image, photo_bytes=None):
         except Exception:
             photo = None
 
-    x, y, w, h = 145, 360, 950, 420
+    x, y, w, h = 150, 430, 940, 360
 
     if photo is None:
         draw.rectangle((x, y, x + w, y + h), fill="#dddddd", outline=GOLD, width=2)
@@ -320,18 +322,18 @@ def create_invitation_png(
     draw_checker_border(img)
 
     # fonts
-    f_top = get_font(46, bold=True)
-    f_header = get_font(27)
-    f_lodge = get_font(30, bold=True)
-    f_title = get_font(54, bold=True)
-    f_body = get_font(28)
-    f_body_bold = get_font(28, bold=True)
-    f_mid = get_font(26, bold=True)
-    f_small = get_font(22)
-    f_small_bold = get_font(22, bold=True)
-    f_tiny = get_font(18)
+    f_top = get_font(42, bold=True)
+    f_header = get_font(25)
+    f_lodge = get_font(28, bold=True)
+    f_title = get_font(50, bold=True)
+    f_body = get_font(26)
+    f_body_bold = get_font(26, bold=True)
+    f_mid = get_font(25, bold=True)
+    f_small = get_font(21)
+    f_small_bold = get_font(21, bold=True)
+    f_tiny = get_font(17)
 
-    y = 110
+    y = 125
     y = draw_center(draw, y, "Ε∴Δ∴Τ∴Μ∴Α∴Τ∴Σ∴", f_top, NAVY, line_spacing=12)
     y = draw_center(draw, y, "Εν Ονόματι και Υπό την Αιγίδα", f_header, NAVY, line_spacing=5)
     y = draw_center(draw, y, "της Μεγάλης Στοάς της Ελλάδος", f_header, NAVY, line_spacing=5)
@@ -340,17 +342,17 @@ def create_invitation_png(
     draw_rule(draw, y + 5, x1=470, x2=770)
     y += 28
 
-    y = draw_center(draw, y, "Σ∴ Στ∴ «ΑΚΡΟΠΟΛΙΣ» υπ’ αριθμόν 84", f_lodge, NAVY, line_spacing=5)
-    y = draw_center(draw, y, "εν Αν∴ Αθηνών", f_lodge, NAVY, line_spacing=10)
+    y = draw_center(draw, y, "Σ∴ Στ∴ «ΑΚΡΟΠΟΛΙΣ» υπ’ αριθμόν 84", f_lodge, NAVY, line_spacing=6)
+    y = draw_center(draw, y, "εν Αν∴ Αθηνών", f_lodge, NAVY, line_spacing=22)
 
     # seal and simple symbol top
-    draw_seal_or_placeholder(img, 128, 140, 120, seal_bytes=seal_bytes)
-    draw_symbol_square_compass(draw, 1040, 210, 54, NAVY)
+    draw_seal_or_placeholder(img, 135, 145, 105, seal_bytes=seal_bytes)
+    draw_symbol_square_compass(draw, 1040, 220, 50, NAVY)
 
     # photo
     add_acropolis_photo(img, photo_bytes=photo_bytes)
 
-    y = 805
+    y = 815
     y = draw_center(draw, y, "ΠΡΟΣΚΛΗΣΗ ΣΕ ΕΡΓΑΣΙΕΣ", f_title, NAVY, line_spacing=4)
     draw_rule(draw, y + 6, x1=455, x2=785)
     y += 34
@@ -359,17 +361,17 @@ def create_invitation_png(
     y = draw_center(draw, y, f"Την {meeting_date} και ώρα {meeting_time},", f_body, NAVY, max_width=860, line_spacing=8)
     y = draw_center(draw, y, "θα πραγματοποιηθούν οι Εργασίες της Σεπτής Στοάς μας", f_body, NAVY, max_width=860, line_spacing=8)
     y = draw_center(draw, y, f"εις Βαθμόν {degree},", f_body, NAVY, max_width=860, line_spacing=14)
-    y = draw_center(draw, y, venue, f_body, NAVY, max_width=860, line_spacing=8)
+    y = draw_center(draw, y, venue, f_body, NAVY, max_width=860, line_spacing=14)
 
     y += 10
-    draw_rule(draw, y + 15, x1=285, x2=955)
-    y += 3
-    y = draw_center(draw, y, "ΗΜΕΡΗΣΙΑ ΔΙΑΤΑΞΙΣ", f_mid, NAVY, line_spacing=26)
+    draw_rule(draw, y + 10, x1=300, x2=940)
+    y += 24
+    y = draw_center(draw, y, "ΗΜΕΡΗΣΙΑ ΔΙΑΤΑΞΙΣ", f_mid, NAVY, line_spacing=22)
 
     # agenda
-    x_ag = 290
+    x_ag = 285
     for item in agenda_items:
-        draw_symbol_square_compass(draw, x_ag - 36, y + 12, 14, GOLD)
+        draw_symbol_square_compass(draw, x_ag - 34, y + 10, 12, GOLD)
         y = draw_left(draw, x_ag, y, item.upper(), f_small_bold, NAVY, max_width=680, line_spacing=12)
 
     y += 4
@@ -411,8 +413,8 @@ def create_invitation_png(
     draw_symbol_square_compass(draw, PAGE_W // 2, sig_y + 55, 40, NAVY)
 
     # next sessions box
-    box_x1, box_y1 = 230, 1570
-    box_x2, box_y2 = PAGE_W - 230, 1695
+    box_x1, box_y1 = 225, 1608
+    box_x2, box_y2 = PAGE_W - 225, 1738
     draw.rounded_rectangle((box_x1, box_y1, box_x2, box_y2), radius=10, outline=BLACK, width=2, fill="#ffffff")
     draw_rule(draw, box_y1 + 28, x1=275, x2=965)
     draw_centered_at(draw, PAGE_W // 2, box_y1 + 12, "ΕΠΟΜΕΝΕΣ ΣΥΝΕΔΡΙΕΣ", f_mid, NAVY)
@@ -426,7 +428,7 @@ def create_invitation_png(
         draw.text((box_x1 + 500, row_y), f"Βαθμός: {deg}", font=f_small, fill=NAVY)
         row_y += 34
 
-    draw_rule(draw, 1710, x1=455, x2=785)
+    draw_rule(draw, 1752, x1=455, x2=785)
 
     # flatten white background for PNG
     out = Image.new("RGB", img.size, WHITE)
