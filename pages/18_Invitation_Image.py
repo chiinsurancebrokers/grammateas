@@ -194,7 +194,7 @@ def remove_white_bg(img_bytes: bytes, threshold: int = 220) -> bytes:
     return buf.read()
 
 
-() -> Image.Image:
+def create_luxury_background() -> Image.Image:
     """Καθαρό λευκό background."""
     bg = Image.new("RGBA", (PAGE_W, PAGE_H), (255, 255, 255, 255))
     return bg
@@ -366,7 +366,7 @@ def process_acropolis(photo_bytes: bytes, box_w: int, box_h: int) -> Image.Image
         for xx in range(box_w):
             alpha.putpixel((xx, yy), min(alpha.getpixel((xx, yy)), val))
 
-    fade_side = int(box_w * 0.12)
+    fade_side = int(box_w * 0.18)
     for xx in range(fade_side):
         t = xx / fade_side
         val = int(255 * t)
@@ -467,15 +467,17 @@ def create_invitation(
     photo_h = 440
     raw_photo = photo_bytes or load_asset("acropolis-photo.jpg")
 
-    draw_photo_frame(draw, photo_x, photo_y, photo_w, photo_h)
+    # Φωτο full-width, χωρίς frame — από border σε border
+    photo_x = 112          # = m (εσωτερικό όριο πλαισίου)
+    photo_w = PAGE_W - 224
     if raw_photo:
         try:
             ph_img = process_acropolis(raw_photo, photo_w, photo_h)
             img.alpha_composite(ph_img, (photo_x, photo_y))
         except Exception:
-            draw.rounded_rectangle([photo_x, photo_y, photo_x + photo_w, photo_y + photo_h], radius=10, fill=(220, 220, 220, 255))
+            draw.rectangle([photo_x, photo_y, photo_x + photo_w, photo_y + photo_h], fill=(220, 220, 220, 255))
     else:
-        draw.rounded_rectangle([photo_x, photo_y, photo_x + photo_w, photo_y + photo_h], radius=10, fill=(220, 220, 220, 255))
+        draw.rectangle([photo_x, photo_y, photo_x + photo_w, photo_y + photo_h], fill=(220, 220, 220, 255))
 
     draw = ImageDraw.Draw(img)
     y = photo_y + photo_h + 46
@@ -713,4 +715,3 @@ with st.expander("ℹ️ Οδηγίες assets"):
     ⚠️ Αν δεν υπάρχει `symbol_center.png`, η κεντρική σφραγίδα **παραλείπεται** (δεν σχεδιάζεται fallback).
     Για τέλεια ποιότητα: PNG με **διαφανές φόντο**, τουλάχιστον **800×800 px**.
     """)
-
