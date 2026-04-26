@@ -15,10 +15,6 @@
 import sys
 sys.path.append("..")
 
-# Αποσιώπηση SyntaxWarnings από το εσωτερικό του pydub (Python 3.14)
-import warnings
-warnings.filterwarnings("ignore", category=SyntaxWarning, module="pydub")
-
 import io
 import json
 import os
@@ -43,6 +39,13 @@ st.set_page_config(
 
 st.markdown("# 🎧 Ηχογράφηση → Πρακτικά ΜΣΤΕ")
 st.caption("Ηχογράφηση → OpenAI transcription → Claude σύνταξη πρακτικών → επεξεργασία → PDF")
+
+# Μικρός έλεγχος περιβάλλοντος για να μη βγάζει παραπλανητικά errors στο audio
+try:
+    from pydub import AudioSegment  # noqa: F401
+    PYDUB_OK = True
+except Exception:
+    PYDUB_OK = False
 
 # ══════════════════════════════════════════════════════════════
 # ΣΤΑΘΕΡΕΣ
@@ -142,10 +145,19 @@ def normalize_to_mp3(audio_bytes: bytes, ext: str) -> Tuple[Optional[bytes], Opt
         out_buf.seek(0)
         return out_buf.read(), None
 
-    except ImportError:
-        return None, "❌ Λείπει το package `pydub`. Πρόσθεσέ το στο requirements.txt."
+    except ImportError as e:
+        return None, (
+            "❌ Δεν φορτώθηκε το package `pydub`. "
+            "Ελέγξτε ότι στο requirements.txt υπάρχει `pydub>=0.25.1`. "
+            f"Λεπτομέρεια: {e}"
+        )
     except Exception as e:
-        return None, f"❌ Σφάλμα στη μετατροπή ήχου: {e}"
+        return None, (
+            "❌ Σφάλμα στη μετατροπή ήχου. "
+            "Αν το αρχείο είναι από iPhone/M4A/AAC, ελέγξτε ότι στο packages.txt υπάρχει `ffmpeg` "
+            "και κάντε Reboot το Streamlit app. "
+            f"Λεπτομέρεια: {e}"
+        )
 
 
 def split_audio_to_chunks(audio_bytes: bytes) -> Tuple[List[bytes], Optional[str]]:
@@ -182,10 +194,17 @@ def split_audio_to_chunks(audio_bytes: bytes) -> Tuple[List[bytes], Optional[str
 
         return chunks if chunks else [audio_bytes], None
 
-    except ImportError:
-        return [audio_bytes], "⚠️ Λείπει το `pydub`. Θα γίνει προσπάθεια αποστολής ως ένα αρχείο."
+    except ImportError as e:
+        return [audio_bytes], (
+            "⚠️ Δεν φορτώθηκε το `pydub`, οπότε δεν έγινε split. "
+            f"Λεπτομέρεια: {e}"
+        )
     except Exception as e:
-        return [audio_bytes], f"⚠️ Δεν έγινε σωστό split. Θα σταλεί ως ένα αρχείο. Λεπτομέρεια: {e}"
+        return [audio_bytes], (
+            "⚠️ Δεν έγινε σωστό split. Θα γίνει προσπάθεια αποστολής ως ένα αρχείο. "
+            "Αν πρόκειται για iPhone/M4A/AAC, ελέγξτε το `ffmpeg` στο packages.txt. "
+            f"Λεπτομέρεια: {e}"
+        )
 
 # ══════════════════════════════════════════════════════════════
 # TRANSCRIPTION CLEANING
@@ -335,13 +354,13 @@ def transcribe_audio(
     full_transcript = clean_transcript(full_transcript)
     full_transcript = remove_overlap_repetition(full_transcript)
 
-    warnings_out = []
+    warnings = []
     if split_warning:
-        warnings_out.append(split_warning)
+        warnings.append(split_warning)
     if errors:
-        warnings_out.append("⚠️ Κάποια chunks δεν μεταγράφηκαν σωστά. Δείτε την ακατέργαστη μεταγραφή.")
+        warnings.append("⚠️ Κάποια chunks δεν μεταγράφηκαν σωστά. Δείτε την ακατέργαστη μεταγραφή.")
 
-    return full_transcript, "\n".join(warnings_out) if warnings_out else None
+    return full_transcript, "\n".join(warnings) if warnings else None
 
 # ══════════════════════════════════════════════════════════════
 # CLAUDE → ΠΡΑΚΤΙΚΑ
@@ -783,12 +802,18 @@ with tab_main:
         st.session_state["last_sel_extra"] = sel_extra
 
         ctx = (
-            f"Βαθμός: {sel_βαθμ}\n"
-            f"Βαθμός σε γενική: {ΒΑΘΜΟΙ_GEN[sel_βαθμ]}\n"
-            f"Ημερομηνία: {sel_ημερ.strftime('%d/%m/%Y')}\n"
-            f"Σεβ∴ Διδ∴: {sel_σεβ}\n"
-            f"Γραμματεύς: {sel_γραμ}\n"
-            f"Ρήτωρ: {sel_ρητ}\n"
+            f"Βαθμός: {sel_βαθμ}
+"
+            f"Βαθμός σε γενική: {ΒΑΘΜΟΙ_GEN[sel_βαθμ]}
+"
+            f"Ημερομηνία: {sel_ημερ.strftime('%d/%m/%Y')}
+"
+            f"Σεβ∴ Διδ∴: {sel_σεβ}
+"
+            f"Γραμματεύς: {sel_γραμ}
+"
+            f"Ρήτωρ: {sel_ρητ}
+"
             f"Επιπλέον πληροφορίες: {sel_extra or '-'}"
         )
 
@@ -868,8 +893,10 @@ with tab_main:
 
                 if st.button("🔄 Ενημέρωση Πρακτικού από διορθωμένη μεταγραφή", use_container_width=True):
                     ctx_update = (
-                        f"Βαθμός: {st.session_state.get('last_sel_βαθμ', '')}\n"
-                        f"Ημερομηνία: {st.session_state.get('last_sel_ημερ', '')}\n"
+                        f"Βαθμός: {st.session_state.get('last_sel_βαθμ', '')}
+"
+                        f"Ημερομηνία: {st.session_state.get('last_sel_ημερ', '')}
+"
                         f"Επιπλέον πληροφορίες: διορθωμένη ακατέργαστη μεταγραφή από τον χρήστη"
                     )
                     with st.spinner("Σύνταξη νέου πρακτικού από τη διορθωμένη μεταγραφή…"):
