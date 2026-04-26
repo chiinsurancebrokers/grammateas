@@ -177,17 +177,41 @@ def paste_asset(
 # ══════════════════════════════════════════════════════════════
 # LUXURY BACKGROUND
 # ══════════════════════════════════════════════════════════════
-def remove_white_bg(img_bytes: bytes, threshold: int = 220) -> bytes:
-    """Κάνει διαφανές το λευκό/ανοιχτό background μιας εικόνας."""
+def remove_white_bg(img_bytes: bytes, threshold: int = 200) -> bytes:
+    """Αφαιρεί το background με flood-fill από τις 4 γωνίες + threshold."""
+    from collections import deque
     img = Image.open(io.BytesIO(img_bytes)).convert("RGBA")
-    data = img.getdata()
-    new_data = []
-    for r, g, b, a in data:
-        if r >= threshold and g >= threshold and b >= threshold:
-            new_data.append((r, g, b, 0))
-        else:
-            new_data.append((r, g, b, a))
-    img.putdata(new_data)
+    w, h = img.size
+    data = list(img.getdata())
+
+    def idx(x, y): return y * w + x
+
+    def is_bg(x, y):
+        r, g, b, a = data[idx(x, y)]
+        return r >= threshold and g >= threshold and b >= threshold
+
+    visited = [False] * (w * h)
+    queue = deque()
+
+    # Seed από τις 4 γωνίες
+    for sx, sy in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]:
+        if is_bg(sx, sy) and not visited[idx(sx, sy)]:
+            queue.append((sx, sy))
+            visited[idx(sx, sy)] = True
+
+    while queue:
+        x, y = queue.popleft()
+        r, g, b, a = data[idx(x, y)]
+        data[idx(x, y)] = (r, g, b, 0)
+        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < w and 0 <= ny < h:
+                ni = idx(nx, ny)
+                if not visited[ni] and is_bg(nx, ny):
+                    visited[ni] = True
+                    queue.append((nx, ny))
+
+    img.putdata(data)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
@@ -366,7 +390,7 @@ def process_acropolis(photo_bytes: bytes, box_w: int, box_h: int) -> Image.Image
         for xx in range(box_w):
             alpha.putpixel((xx, yy), min(alpha.getpixel((xx, yy)), val))
 
-    fade_side = int(box_w * 0.18)
+    fade_side = int(box_w * 0.30)
     for xx in range(fade_side):
         t = xx / fade_side
         val = int(255 * t)
