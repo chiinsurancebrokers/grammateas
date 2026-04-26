@@ -706,7 +706,7 @@ if st.button("🎨 Δημιουργία Πρόσκλησης PNG", type="primary
     st.success("✅ Έτοιμο!")
 
 if "inv_png" in st.session_state:
-    st.image(st.session_state["inv_png"], width="stretch")
+    st.image(st.session_state["inv_png"], use_container_width=True)
     st.download_button(
         "⬇️ Λήψη PNG",
         data=st.session_state["inv_png"],
