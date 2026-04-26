@@ -1,9 +1,8 @@
 streamlit>=1.30
 pandas>=2.0
 plotly>=5.0
-reportlab>=4.0
 anthropic>=0.25
-pydub
-av
 openai>=1.50.0
 Pillow
+pydub>=0.25.1
+reportlab>=4.0
