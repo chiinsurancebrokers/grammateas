@@ -44,7 +44,7 @@ st.set_page_config(page_title="Πρόσκληση Εργασιών", page_icon="
 # ══════════════════════════════════════════════════════════════
 # ΣΤΑΘΕΡΕΣ
 # ══════════════════════════════════════════════════════════════
-PAGE_W, PAGE_H = 1240, 1800
+PAGE_W, PAGE_H = 1240, 2050
 NAVY = (18, 26, 63)
 NAVY_SOFT = (29, 39, 78)
 GOLD = (155, 130, 77)
@@ -435,16 +435,16 @@ def create_invitation(
     f_next = font(18)
 
     # Header
-    y = 126
-    y = center(draw, y, "Ε∴ Δ∴ Τ∴ Μ∴ Α∴ Τ∴ Σ∴", f_top, NAVY, lsp=8)
-    y = center(draw, y, "Εν Ονόματι και Υπό την Αιγίδα", f_header, NAVY, lsp=3)
-    y = center(draw, y, "της Μεγάλης Στοάς της Ελλάδος", f_header, NAVY, lsp=3)
-    y = center(draw, y, "των Αρχαίων Ελευθέρων και Αποδεδεγμένων Τεκτόνων", f_header, NAVY, max_w=TEXT_W, lsp=10)
-    ornament(draw, y + 7, x1=475, x2=765)
-    y += 27
+    y = 140
+    y = center(draw, y, "Ε∴ Δ∴ Τ∴ Μ∴ Α∴ Τ∴ Σ∴", f_top, NAVY, lsp=14)
+    y = center(draw, y, "Εν Ονόματι και Υπό την Αιγίδα", f_header, NAVY, lsp=6)
+    y = center(draw, y, "της Μεγάλης Στοάς της Ελλάδος", f_header, NAVY, lsp=6)
+    y = center(draw, y, "των Αρχαίων Ελευθέρων και Αποδεδεγμένων Τεκτόνων", f_header, NAVY, max_w=TEXT_W, lsp=16)
+    ornament(draw, y + 8, x1=475, x2=765)
+    y += 34
 
-    y = center(draw, y, "Σ∴ Στ∴ «ΑΚΡΟΠΟΛΙΣ» υπ' αριθμόν 84", f_lodge, NAVY, lsp=6)
-    y = center(draw, y, "εν Αν∴ Αθηνών", f_lodge, NAVY, lsp=18)
+    y = center(draw, y, "Σ∴ Στ∴ «ΑΚΡΟΠΟΛΙΣ» υπ' αριθμόν 84", f_lodge, NAVY, lsp=10)
+    y = center(draw, y, "εν Αν∴ Αθηνών", f_lodge, NAVY, lsp=26)
 
     # Top right symbol — optional asset
     if symbol_top_bytes:
@@ -454,9 +454,9 @@ def create_invitation(
 
     # Photo
     photo_x = INNER_X - 42
-    photo_y = y + 10
+    photo_y = y + 18
     photo_w = PAGE_W - photo_x * 2
-    photo_h = 365
+    photo_h = 440
     raw_photo = photo_bytes or load_asset("acropolis-photo.jpg")
 
     draw_photo_frame(draw, photo_x, photo_y, photo_w, photo_h)
@@ -470,25 +470,26 @@ def create_invitation(
         draw.rounded_rectangle([photo_x, photo_y, photo_x + photo_w, photo_y + photo_h], radius=10, fill=(220, 220, 220, 255))
 
     draw = ImageDraw.Draw(img)
-    y = photo_y + photo_h + 34
+    y = photo_y + photo_h + 46
 
-    # ── FIX #2: Τίτλος με σωστό breathing space ──────────────────
+    # ── Τίτλος με γενναίο breathing space ────────────────────────
     y = center(draw, y, "ΠΡΟΣΚΛΗΣΗ ΣΕ ΕΡΓΑΣΙΕΣ", f_title, NAVY, lsp=6)
-    y += 8                                        # ← extra κενό πριν το ornament
+    y += 16
     ornament(draw, y + 6, x1=420, x2=820)
-    y += 28
+    y += 38
     # ─────────────────────────────────────────────────────────────
 
     # Meeting details
-    y = center(draw, y, f"Την {meeting_date} και ώρα {meeting_time},", f_body_b, NAVY, max_w=TEXT_W, lsp=6)
-    y = center(draw, y, "θα πραγματοποιηθούν οι Εργασίες της Σεπτής Στοάς μας", f_body, NAVY, max_w=TEXT_W, lsp=6)
-    y = center(draw, y, f"εις Βαθμόν {degree},", f_body, NAVY, max_w=TEXT_W, lsp=9)
+    y = center(draw, y, f"Την {meeting_date} και ώρα {meeting_time},", f_body_b, NAVY, max_w=TEXT_W, lsp=10)
+    y = center(draw, y, "θα πραγματοποιηθούν οι Εργασίες της Σεπτής Στοάς μας", f_body, NAVY, max_w=TEXT_W, lsp=10)
+    y = center(draw, y, f"εις Βαθμόν {degree},", f_body, NAVY, max_w=TEXT_W, lsp=12)
     y = center(draw, y, venue, f_body, NAVY, max_w=TEXT_W, lsp=10)
 
-    y += 2
+    y += 14
     y = luxury_section_label(draw, y, "ΗΜΕΡΗΣΙΑ ΔΙΑΤΑΞΙΣ", f_section)
+    y += 6
 
-    # ── FIX #3: Agenda bullets — πάντα symbol_center_bytes ───────
+    # ── Agenda bullets ────────────────────────────────────────────
     bullet_x = INNER_X + 70
     text_x = bullet_x + 48
     for item in agenda_items:
@@ -497,24 +498,24 @@ def create_invitation(
         else:
             draw_wreath_symbol(draw, bullet_x, y + 10, 16, GOLD_DARK)
         y = left(draw, text_x, y, item.upper(), f_agenda, NAVY, max_w=TEXT_W - 80, lsp=4)
-        y += 1
+        y += 10   # ← κενό ανάμεσα στα agenda items
     # ─────────────────────────────────────────────────────────────
 
-    y += 4
+    y += 14
 
     # Speaker / Topic
     if speaker.strip():
-        y = center(draw, y, f"Ομιλητής: {speaker.strip()}", f_small, NAVY, max_w=TEXT_W, lsp=5)
+        y = center(draw, y, f"Ομιλητής: {speaker.strip()}", f_small, NAVY, max_w=TEXT_W, lsp=8)
     else:
-        y = center(draw, y, "Ομιλητής: ________________________________", f_small, NAVY, lsp=5)
+        y = center(draw, y, "Ομιλητής: ________________________________", f_small, NAVY, lsp=8)
 
     if topic.strip():
-        y = center(draw, y, f"Θέμα: «{topic.strip()}»", f_small, NAVY, max_w=TEXT_W, lsp=7)
+        y = center(draw, y, f"Θέμα: «{topic.strip()}»", f_small, NAVY, max_w=TEXT_W, lsp=10)
     else:
-        y = center(draw, y, "Θέμα: «__________________________________»", f_small, NAVY, lsp=7)
+        y = center(draw, y, "Θέμα: «__________________________________»", f_small, NAVY, lsp=10)
 
-    ornament(draw, y + 3, x1=480, x2=760)
-    y += 20
+    ornament(draw, y + 6, x1=480, x2=760)
+    y += 32
 
     # Closing
     para = (
@@ -522,63 +523,62 @@ def create_invitation(
         "ιδιαίτερη χαρά και τιμή για το Πλήρωμα του Εργαστηρίου μας και τον "
         "Αδελφό Σεβάσμιο ιδιαιτέρως."
     )
-    y = center(draw, y, para, f_small, NAVY, max_w=TEXT_W, lsp=4)
-    y += 1
-    y = center(draw, y, "Μετά το πέρας των Εργασιών θα ακολουθήσει Ποτήριον Αγάπης.", f_small, NAVY, max_w=TEXT_W, lsp=5)
-    y = center(draw, y, "Με τον τριπλό αδελφικό ασπασμό,", f_small, NAVY, lsp=12)
+    y = center(draw, y, para, f_small, NAVY, max_w=TEXT_W, lsp=8)
+    y += 6
+    y = center(draw, y, "Μετά το πέρας των Εργασιών θα ακολουθήσει Ποτήριον Αγάπης.", f_small, NAVY, max_w=TEXT_W, lsp=10)
+    y = center(draw, y, "Με τον τριπλό αδελφικό ασπασμό,", f_small, NAVY, lsp=22)
 
-    # ── FIX #4: Signatures με καλύτερο spacing ────────────────────
-    sig_y = y + 4
+    # ── Signatures ────────────────────────────────────────────────
+    sig_y = y + 8
     sig_lx = INNER_X + 170
     sig_rx = PAGE_W - INNER_X - 170
     center_at(draw, sig_lx, sig_y, "Ο Σεβάσμιος", f_sig, NAVY)
     center_at(draw, sig_rx, sig_y, "Ο Γραμματεύς", f_sig, NAVY)
 
-    line_y = sig_y + 64                          # ← από 58/62 → 64 για πιο clean spacing
+    line_y = sig_y + 80
     draw.line([(sig_lx - 130, line_y), (sig_lx + 130, line_y)], fill=NAVY, width=2)
     draw.line([(sig_rx - 130, line_y), (sig_rx + 130, line_y)], fill=NAVY, width=2)
 
     if master.strip():
-        center_at(draw, sig_lx, line_y + 8, master.strip().upper(), f_sig_name, NAVY)
+        center_at(draw, sig_lx, line_y + 10, master.strip().upper(), f_sig_name, NAVY)
     if secretary.strip():
-        center_at(draw, sig_rx, line_y + 8, secretary.strip().upper(), f_sig_name, NAVY)
+        center_at(draw, sig_rx, line_y + 10, secretary.strip().upper(), f_sig_name, NAVY)
     # ─────────────────────────────────────────────────────────────
 
-    # ── FIX #1: Κεντρική σφραγίδα — ΠΑΝΤΑ akropolis-seal.png ───
-    symbol_box_w, symbol_box_h = 175, 135
+    # ── Κεντρική σφραγίδα — αποκλειστικά akropolis-seal.png ─────
+    symbol_box_w, symbol_box_h = 190, 150
     symbol_x = (PAGE_W - symbol_box_w) // 2
     symbol_y = sig_y + 3
-    # Χρησιμοποιεί αποκλειστικά το akropolis-seal.png
     paste_asset(img, seal_bytes, symbol_x, symbol_y, symbol_box_w, symbol_box_h)
     # ─────────────────────────────────────────────────────────────
 
-    y = line_y + 82
+    y = line_y + 100
     if master.strip() or secretary.strip():
-        y += 12
+        y += 14
 
-    # Next sessions box — fixed inside frame
+    # Next sessions box
     box_x1 = INNER_X - 18
     box_x2 = PAGE_W - INNER_X + 18
-    box_y1 = min(max(y + 12, 1540), PAGE_H - 265)
-    box_h = 54 + len(next_sessions[:4]) * 30 + 20
-    box_y2 = min(box_y1 + box_h, PAGE_H - 145)
+    box_y1 = min(max(y + 20, 1760), PAGE_H - 290)
+    box_h = 60 + len(next_sessions[:4]) * 36 + 24
+    box_y2 = min(box_y1 + box_h, PAGE_H - 160)
 
     draw.rounded_rectangle([box_x1, box_y1, box_x2, box_y2], radius=12, outline=BLACK, width=2, fill=(255, 254, 249))
     draw.rounded_rectangle([box_x1 + 5, box_y1 + 5, box_x2 - 5, box_y2 - 5], radius=10, outline=NAVY, width=1)
     draw.rounded_rectangle([box_x1 + 9, box_y1 + 9, box_x2 - 9, box_y2 - 9], radius=8, outline=(206, 190, 150), width=1)
 
-    header_y = box_y1 + 14
+    header_y = box_y1 + 18
     center_at(draw, PAGE_W // 2, header_y, "ΕΠΟΜΕΝΕΣ ΣΥΝΕΔΡΙΕΣ", font(22, bold=True), NAVY)
-    rule(draw, header_y + 32, x1=box_x1 + 110, x2=box_x2 - 110)
+    rule(draw, header_y + 36, x1=box_x1 + 110, x2=box_x2 - 110)
 
-    row_y = header_y + 42
+    row_y = header_y + 50
     for dt, deg in next_sessions[:4]:
         cal_x = box_x1 + 105
         draw.rectangle([cal_x, row_y + 2, cal_x + 18, row_y + 22], outline=NAVY, width=2)
         draw.line([(cal_x, row_y + 8), (cal_x + 18, row_y + 8)], fill=NAVY, width=2)
         draw.text((box_x1 + 138, row_y), dt, font=f_next, fill=NAVY)
         draw.text((box_x1 + 515, row_y), f"Βαθμός: {deg}", font=f_next, fill=NAVY)
-        row_y += 30
+        row_y += 36
 
     if box_y2 + 22 < PAGE_H - 118:
         ornament(draw, box_y2 + 20, x1=480, x2=760)
