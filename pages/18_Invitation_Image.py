@@ -182,36 +182,30 @@ def remove_white_bg(img_bytes: bytes, threshold: int = 200) -> bytes:
     from collections import deque
     img = Image.open(io.BytesIO(img_bytes)).convert("RGBA")
     w, h = img.size
-    data = list(img.getdata())
-
-    def idx(x, y): return y * w + x
+    px = img.load()  # pixel access object — no deprecated getdata
 
     def is_bg(x, y):
-        r, g, b, a = data[idx(x, y)]
+        r, g, b, a = px[x, y]
         return r >= threshold and g >= threshold and b >= threshold
 
-    visited = [False] * (w * h)
+    visited = [[False] * h for _ in range(w)]
     queue = deque()
 
-    # Seed από τις 4 γωνίες
     for sx, sy in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]:
-        if is_bg(sx, sy) and not visited[idx(sx, sy)]:
+        if is_bg(sx, sy) and not visited[sx][sy]:
             queue.append((sx, sy))
-            visited[idx(sx, sy)] = True
+            visited[sx][sy] = True
 
     while queue:
         x, y = queue.popleft()
-        r, g, b, a = data[idx(x, y)]
-        data[idx(x, y)] = (r, g, b, 0)
+        r, g, b, a = px[x, y]
+        px[x, y] = (r, g, b, 0)
         for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
             nx, ny = x + dx, y + dy
-            if 0 <= nx < w and 0 <= ny < h:
-                ni = idx(nx, ny)
-                if not visited[ni] and is_bg(nx, ny):
-                    visited[ni] = True
-                    queue.append((nx, ny))
+            if 0 <= nx < w and 0 <= ny < h and not visited[nx][ny] and is_bg(nx, ny):
+                visited[nx][ny] = True
+                queue.append((nx, ny))
 
-    img.putdata(data)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
@@ -712,7 +706,7 @@ if st.button("🎨 Δημιουργία Πρόσκλησης PNG", type="primary
     st.success("✅ Έτοιμο!")
 
 if "inv_png" in st.session_state:
-    st.image(st.session_state["inv_png"], use_container_width=True)
+    st.image(st.session_state["inv_png"], width="stretch")
     st.download_button(
         "⬇️ Λήψη PNG",
         data=st.session_state["inv_png"],
