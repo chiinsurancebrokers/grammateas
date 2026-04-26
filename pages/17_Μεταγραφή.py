@@ -443,6 +443,66 @@ def transcribe_audio(
         warnings.append("⚠️ Κάποια chunks δεν μεταγράφηκαν σωστά.")
     return full, "\n".join(warnings) if warnings else None
 
+
+# ══════════════════════════════════════════════════════════════
+# JSON EXTRACTION HELPER
+# ══════════════════════════════════════════════════════════════
+def _extract_json(raw: str) -> Optional[dict]:
+    """
+    Προσπαθεί να εξαγάγει έγκυρο JSON object από raw κείμενο του Claude.
+    Στρατηγική:
+      1. Αφαίρεση markdown fences → απευθείας parse
+      2. Εύρεση πρώτου { ... } με μέτρηση βάθους → parse
+    Επιστρέφει dict ή None αν αποτύχουν όλα.
+    """
+    if not raw:
+        return None
+
+    # Βήμα 1: αφαίρεση ```json ... ``` και απευθείας parse
+    clean = raw.strip()
+    clean = re.sub(r"^```(?:json)?\s*", "", clean, flags=re.MULTILINE)
+    clean = re.sub(r"\s*```\s*$", "", clean, flags=re.MULTILINE).strip()
+    try:
+        return json.loads(clean)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Βήμα 2: βρίσκουμε το πρώτο { και μετράμε ως το αντίστοιχο }
+    start = raw.find("{")
+    if start == -1:
+        return None
+
+    depth = 0
+    in_str = False
+    esc = False
+    end = -1
+    for idx in range(start, len(raw)):
+        ch = raw[idx]
+        if esc:
+            esc = False
+            continue
+        if ch == "\\" and in_str:
+            esc = True
+            continue
+        if ch == '"':
+            in_str = not in_str
+        if not in_str:
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end = idx
+                    break
+
+    if end == -1:
+        return None
+
+    try:
+        return json.loads(raw[start:end + 1])
+    except (json.JSONDecodeError, ValueError):
+        return None
+
 # ══════════════════════════════════════════════════════════════
 # CLAUDE → ΠΡΑΚΤΙΚΑ
 # ══════════════════════════════════════════════════════════════
