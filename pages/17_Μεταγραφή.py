@@ -26,6 +26,7 @@ import io
 import json
 import os
 import re
+import urllib.request
 from datetime import date
 from typing import Callable, Optional, Tuple, List, Dict, Any
 
@@ -95,6 +96,106 @@ TRANSCRIPTION_PROMPT = """
 Μην γράφεις "Ευχαριστούμε που παρακολουθήσατε".
 Αν ένα σημείο δεν ακούγεται, γράψε [ακατάληπτο].
 """.strip()
+
+# ══════════════════════════════════════════════════════════════
+# DEJAVU FONTS — AUTO DOWNLOAD
+# ══════════════════════════════════════════════════════════════
+
+# Τα DejaVu fonts είναι open-source και ελεύθερα διαθέσιμα.
+# Αν δεν βρεθούν τοπικά (π.χ. στο Streamlit Cloud), κατεβαίνουν
+# αυτόματα από το GitHub repo των DejaVu fonts.
+_FONT_URLS = {
+    "DejaVuSans.ttf":       "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf",
+    "DejaVuSans-Bold.ttf":  "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans-Bold.ttf",
+    "DejaVuSerif.ttf":      "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSerif.ttf",
+    "DejaVuSerif-Bold.ttf": "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSerif-Bold.ttf",
+    "DejaVuSerif-Italic.ttf": "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSerif-Italic.ttf",
+}
+
+# Αποθήκευση σε /tmp για persistence εντός session στο Streamlit Cloud
+_FONT_CACHE_DIR = "/tmp/grammateas_fonts"
+
+
+def ensure_fonts() -> str:
+    """
+    Επιστρέφει τον φάκελο με τα DejaVu fonts.
+    Ελέγχει πολλαπλά πιθανά paths πριν καταφύγει στο auto-download.
+    """
+    sentinel = "DejaVuSans.ttf"
+
+    # Όλα τα πιθανά paths όπου μπορεί να βρίσκεται το fonts/ φάκελος
+    candidates = []
+
+    # Από τη θέση του τρέχοντος αρχείου (pages/17_xxx.py → project_root/fonts/)
+    try:
+        this_file = os.path.abspath(__file__)
+        candidates.append(os.path.join(os.path.dirname(os.path.dirname(this_file)), "fonts"))
+        candidates.append(os.path.join(os.path.dirname(this_file), "fonts"))
+    except Exception:
+        pass
+
+    # Από το τρέχον working directory
+    candidates.append(os.path.join(os.getcwd(), "fonts"))
+    candidates.append(os.path.join(os.getcwd(), "..", "fonts"))
+
+    # Streamlit Cloud mount path
+    candidates.append("/mount/src/grammateas/fonts")
+
+    for candidate in candidates:
+        candidate = os.path.normpath(candidate)
+        if os.path.isdir(candidate) and os.path.exists(os.path.join(candidate, sentinel)):
+            return candidate
+
+    # Fallback: auto-download στο /tmp
+    os.makedirs(_FONT_CACHE_DIR, exist_ok=True)
+    for filename, url in _FONT_URLS.items():
+        dest = os.path.join(_FONT_CACHE_DIR, filename)
+        if not os.path.exists(dest):
+            try:
+                urllib.request.urlretrieve(url, dest)
+            except Exception:
+                pass
+    return _FONT_CACHE_DIR
+
+
+def register_dejavu_fonts() -> Tuple[str, str, str, str]:
+    """
+    Καταχωρεί τα DejaVu fonts στο reportlab και επιστρέφει
+    τα ονόματα (sans, sans-bold, serif, serif-bold).
+    Αν αποτύχει, επιστρέφει τα built-in Helvetica (χωρίς ελληνικά,
+    αλλά τουλάχιστον δεν κρασάρει).
+    """
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    font_dir = ensure_fonts()
+
+    font_map = {
+        "DJVS":  "DejaVuSans.ttf",
+        "DJVSB": "DejaVuSans-Bold.ttf",
+        "DJVR":  "DejaVuSerif.ttf",
+        "DJVRB": "DejaVuSerif-Bold.ttf",
+        "DJVRI": "DejaVuSerif-Italic.ttf",
+    }
+
+    registered = set(pdfmetrics.getRegisteredFontNames())
+    for alias, filename in font_map.items():
+        if alias not in registered:
+            path = os.path.join(font_dir, filename)
+            if os.path.exists(path):
+                try:
+                    pdfmetrics.registerFont(TTFont(alias, path))
+                except Exception:
+                    pass
+
+    registered = set(pdfmetrics.getRegisteredFontNames())
+
+    fs  = "DJVS"  if "DJVS"  in registered else "Helvetica"
+    fsb = "DJVSB" if "DJVSB" in registered else "Helvetica-Bold"
+    fr  = "DJVR"  if "DJVR"  in registered else "Helvetica"
+    frb = "DJVRB" if "DJVRB" in registered else "Helvetica-Bold"
+
+    return fs, fsb, fr, frb
 
 # ══════════════════════════════════════════════════════════════
 # API KEYS
@@ -229,10 +330,8 @@ def extract_text_from_docx(docx_bytes: bytes) -> Tuple[str, Optional[str]]:
             process_element(child)
 
         full_text = "\n".join(lines).strip()
-
         if not full_text:
             return "", "⚠️ Το αρχείο Word δεν περιέχει αναγνώσιμο κείμενο."
-
         return full_text, None
 
     except ImportError:
@@ -465,7 +564,6 @@ def process_docx_to_praktiko(
     docx_bytes: bytes, context: str,
     progress_cb: Optional[Callable] = None,
 ):
-    """Εξάγει κείμενο από .docx και συντάσσει πρακτικά με Claude."""
     if progress_cb:
         progress_cb(10, "📄 Ανάγνωση αρχείου Word…")
     text, err = extract_text_from_docx(docx_bytes)
@@ -492,27 +590,11 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY, TA_RIGHT
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
 
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    font_dir = os.path.join(base_dir, "fonts")
-    fonts = {
-        "DSS": "DejaVuSans.ttf", "DSSB": "DejaVuSans-Bold.ttf",
-        "DSR": "DejaVuSerif.ttf", "DSB": "DejaVuSerif-Bold.ttf",
-        "DSI": "DejaVuSerif-Italic.ttf",
-    }
-    for alias, filename in fonts.items():
-        path = os.path.join(font_dir, filename)
-        if alias not in pdfmetrics.getRegisteredFontNames() and os.path.exists(path):
-            pdfmetrics.registerFont(TTFont(alias, path))
+    # ── Φόρτωση / auto-download DejaVu fonts ──────────────────
+    fs, fsb, fr, frb = register_dejavu_fonts()
 
-    fs  = "DSS"  if "DSS"  in pdfmetrics.getRegisteredFontNames() else "Helvetica"
-    fsb = "DSSB" if "DSSB" in pdfmetrics.getRegisteredFontNames() else "Helvetica-Bold"
-    fr  = "DSR"  if "DSR"  in pdfmetrics.getRegisteredFontNames() else "Helvetica"
-    frb = "DSB"  if "DSB"  in pdfmetrics.getRegisteredFontNames() else "Helvetica-Bold"
-
-    cnvy = colors.HexColor(NAVY)
+    cnvy  = colors.HexColor(NAVY)
     cgold = colors.HexColor(GOLD)
 
     def S(name, **kw):
@@ -655,7 +737,7 @@ def show_editor(r: dict, key_prefix: str = "") -> dict:
     return r
 
 # ══════════════════════════════════════════════════════════════
-# HELPERS UI
+# UI HELPERS
 # ══════════════════════════════════════════════════════════════
 def render_meeting_fields(prefix: str):
     ca, cb, cc = st.columns(3)
@@ -703,14 +785,14 @@ def render_pdf_section(edited: dict, key_prefix: str):
     with col_gen:
         if st.button("📄 Δημιουργία PDF Πρακτικού", type="primary",
                      use_container_width=True, key=f"{key_prefix}_genpdf"):
-            with st.spinner("Δημιουργία PDF…"):
+            with st.spinner("Δημιουργία PDF… (την πρώτη φορά κατεβαίνουν τα fonts ~2MB)"):
                 try:
                     pdf = generate_praktiko_pdf(edited)
                     st.session_state[f"{key_prefix}_pdf_bytes"] = pdf.getvalue()
                     st.session_state[f"{key_prefix}_pdf_label"] = (
                         edited.get("ημερομηνία", "") or str(date.today())
                     ).replace("/", "_")
-                    st.success("✅ PDF έτοιμο.")
+                    st.success("✅ PDF έτοιμο με ελληνικούς χαρακτήρες.")
                 except Exception as e:
                     st.error(f"❌ Σφάλμα δημιουργίας PDF: {e}")
     with col_dl:
@@ -752,16 +834,14 @@ with tab_audio:
         raw_bytes = audio_file.getvalue()
         size_mb = mb_size(raw_bytes)
         ext = audio_file.name.rsplit(".", 1)[-1].lower()
-
         show_audio_preview = st.checkbox(
             "🎧 Εμφάνιση audio player", value=False,
-            help="Για μεγάλα αρχεία, αφήστε το κλειστό όσο διορθώνετε τη μεταγραφή.",
+            help="Για μεγάλα αρχεία, αφήστε το κλειστό.",
         )
         if show_audio_preview:
             with st.expander("🎧 Προεπισκόπηση ηχογράφησης", expanded=True):
                 st.warning("Για μεγάλα αρχεία, μην έχετε ανοιχτό ταυτόχρονα το audio player και την ακατέργαστη μεταγραφή.")
                 st.audio(raw_bytes, format=f"audio/{ext}")
-
         if size_mb > MAX_MB_RAW:
             st.error(f"⛔ Το αρχείο είναι {size_mb:.1f}MB και ξεπερνά το όριο {MAX_MB_RAW}MB.")
         else:
@@ -780,7 +860,6 @@ with tab_audio:
         ctx = build_ctx(a_βαθμ, a_ημερ, a_σεβ, a_γραμ, a_ρητ, a_extra)
         st.session_state["aud_last_βαθμ"] = a_βαθμ
         st.session_state["aud_last_ημερ"] = a_ημερ.strftime("%d/%m/%Y")
-
         progress_bar = st.progress(0)
         status_text  = st.empty()
 
@@ -860,7 +939,6 @@ with tab_word:
         "Ανεβάστε αρχείο **.docx** — σημειώσεις, προσχέδιο ή ακατέργαστο κείμενο συνεδρίασης. "
         "Το κείμενο εξάγεται αυτόματα και ο Claude συντάσσει τα επίσημα Πρακτικά."
     )
-
     word_file = st.file_uploader("Ανεβάστε αρχείο .docx — max 50MB",
                                   type=["docx"], key="wrd_uploader")
     if word_file:
@@ -884,7 +962,6 @@ with tab_word:
         ctx = build_ctx(w_βαθμ, w_ημερ, w_σεβ, w_γραμ, w_ρητ, w_extra)
         st.session_state["wrd_last_βαθμ"] = w_βαθμ
         st.session_state["wrd_last_ημερ"] = w_ημερ.strftime("%d/%m/%Y")
-
         progress_bar = st.progress(0)
         status_text  = st.empty()
 
@@ -914,8 +991,7 @@ with tab_word:
         if raw_wrd:
             with st.expander("📄 Κείμενο που εξήχθη από το Word", expanded=False):
                 st.text_area("Εξαχθέν κείμενο", raw_wrd, height=300,
-                             label_visibility="collapsed", key="wrd_raw_view",
-                             help="Αυτό είναι το κείμενο που διάβασε ο Claude από το αρχείο σας.")
+                             label_visibility="collapsed", key="wrd_raw_view")
                 if st.button("🔄 Επανασύνταξη Πρακτικού",
                              use_container_width=True, key="wrd_reformat"):
                     ctx2 = (
@@ -962,6 +1038,16 @@ with tab_help:
     5. Διορθώνετε το πρακτικό στον editor.
     6. Δημιουργείτε PDF.
 
+    ## Fonts & Ελληνικοί Χαρακτήρες στο PDF
+
+    Το app χρησιμοποιεί τα **DejaVu fonts** (open-source) για πλήρη υποστήριξη
+    ελληνικών χαρακτήρων. Αν βρεθούν στο φάκελο `fonts/` του project,
+    χρησιμοποιούνται από εκεί. Αλλιώς **κατεβαίνουν αυτόματα** (~2MB) από το
+    GitHub repo των DejaVu fonts και αποθηκεύονται στο `/tmp/` για το τρέχον session.
+
+    Για μόνιμη εγκατάσταση (χωρίς download σε κάθε reboot):
+    προσθέστε τα αρχεία `.ttf` στο φάκελο `fonts/` του repository σας.
+
     ## Streamlit Secrets
 
     ```toml
@@ -994,7 +1080,7 @@ with tab_help:
     - Το .docx μπορεί να είναι απλές σημειώσεις, ακατέργαστο πρακτικό ή transcript.
     - Πίνακες, επικεφαλίδες και παράγραφοι αναγνωρίζονται αυτόματα.
     - Στο "Επιπλέον πλαίσιο" αναφέρετε αν το κείμενο χρειάζεται περίληψη ομιλιών.
-    - Μετά τη σύνταξη μπορείτε να πατήσετε **Επανασύνταξη** χωρίς να ξανανεβάσετε αρχείο.
+    - Μετά τη σύνταξη μπορείτε να πατήσετε **Επανασύνταξη** χωρίς νέο upload.
 
     ## Σημαντικές πρακτικές για καλύτερη μεταγραφή
 
