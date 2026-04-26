@@ -4,8 +4,8 @@
 
 Ροή:
 1. Upload αρχείου ήχου: wav/mp3/m4a/ogg/webm/aac
-2. Μετατροπή/κανονικοποίηση σε MP3 mono 16kHz
-3. Αυτόματο split σε chunks με overlap
+2. Μετατροπή/κανονικοποίηση σε MP3 mono 16kHz με pydub/ffmpeg
+3. Αυτόματο split σε ασφαλή chunks με μικρό overlap
 4. OpenAI transcription στα Ελληνικά με domain prompt
 5. Καθαρισμός hallucinations / υποτίτλων / άχρηστων επαναλήψεων
 6. Claude → σύνταξη επίσημων Πρακτικών σε JSON
@@ -34,7 +34,7 @@ init_db()
 st.set_page_config(
     page_title="Μεταγραφή → Πρακτικά",
     page_icon="🎧",
-    layout="wide"
+    layout="wide",
 )
 
 st.markdown("# 🎧 Ηχογράφηση → Πρακτικά ΜΣΤΕ")
@@ -55,15 +55,16 @@ SUPPORTED = ["wav", "mp3", "m4a", "ogg", "webm", "aac"]
 NAVY = "#1a2a4a"
 GOLD = "#b8960c"
 
-# Για transcription: 10 λεπτά ανά chunk + 10 sec overlap
-CHUNK_SEC = 600
-OVERLAP_SEC = 10
-AUDIO_RATE = 16000
-AUDIO_BITRATE = 64000
+# Ασφαλέστερες ρυθμίσεις για Streamlit Cloud / OpenAI audio upload
+CHUNK_SEC = 300              # 5 λεπτά ανά chunk
+OVERLAP_SEC = 3              # μικρό overlap για να μην κόβονται λέξεις
+AUDIO_RATE = 16000           # speech-friendly sample rate
+AUDIO_BITRATE = "32k"        # μικρότερο μέγεθος, αρκετό για speech
+MAX_OPENAI_CHUNK_MB = 24      # κάτω από το όριο των 25MB
 
 TRANSCRIPTION_MODEL_PRIMARY = "gpt-4o-transcribe"
 TRANSCRIPTION_MODEL_FALLBACK = "whisper-1"
-CLAUDE_MODEL = "claude-sonnet-4-6"   # ← ενημερωμένο model
+CLAUDE_MODEL = "claude-sonnet-4-6"
 
 TRANSCRIPTION_PROMPT = """
 Η ηχογράφηση είναι ελληνική τεκτονική συνεδρίαση της Στοάς Ακρόπολις υπ' αριθμόν 84.
@@ -108,103 +109,77 @@ def get_anthropic_key() -> str:
 # ══════════════════════════════════════════════════════════════
 # AUDIO HELPERS
 # ══════════════════════════════════════════════════════════════
+def mb_size(data: bytes) -> float:
+    return len(data) / (1024 * 1024)
+
+
 def normalize_to_mp3(audio_bytes: bytes, ext: str) -> Tuple[Optional[bytes], Optional[str]]:
     """
     Μετατρέπει οποιοδήποτε supported audio σε MP3 mono 16kHz.
-    Επιστρέφει: (mp3_bytes, error_message)
+    Χρησιμοποιεί pydub/ffmpeg, πιο σταθερό από PyAV για Streamlit Cloud.
     """
     try:
-        import av
+        from pydub import AudioSegment
 
-        in_buf = io.BytesIO(audio_bytes)
+        audio = AudioSegment.from_file(io.BytesIO(audio_bytes), format=ext)
+
+        # Κανονικοποίηση για ομιλία
+        audio = audio.set_channels(1)
+        audio = audio.set_frame_rate(AUDIO_RATE)
+
         out_buf = io.BytesIO()
-
-        with av.open(in_buf) as inp:
-            audio_stream = next((s for s in inp.streams if s.type == "audio"), None)
-            if audio_stream is None:
-                return None, "❌ Δεν βρέθηκε audio stream στο αρχείο."
-
-            with av.open(out_buf, mode="w", format="mp3") as out:
-                ostream = out.add_stream("mp3", rate=AUDIO_RATE)
-                ostream.bit_rate = AUDIO_BITRATE
-
-                for frame in inp.decode(audio=0):
-                    frame.pts = None
-                    for pkt in ostream.encode(frame):
-                        out.mux(pkt)
-
-                for pkt in ostream.encode():
-                    out.mux(pkt)
+        audio.export(
+            out_buf,
+            format="mp3",
+            bitrate=AUDIO_BITRATE,
+            parameters=["-ac", "1", "-ar", str(AUDIO_RATE)],
+        )
 
         out_buf.seek(0)
         return out_buf.read(), None
 
     except ImportError:
-        return None, "❌ Λείπει το package `av`. Πρόσθεσέ το στο requirements.txt."
+        return None, "❌ Λείπει το package `pydub`. Πρόσθεσέ το στο requirements.txt."
     except Exception as e:
         return None, f"❌ Σφάλμα στη μετατροπή ήχου: {e}"
 
 
 def split_audio_to_chunks(audio_bytes: bytes) -> Tuple[List[bytes], Optional[str]]:
     """
-    Σπάει το normalized MP3 σε chunks περίπου CHUNK_SEC με OVERLAP_SEC overlap.
+    Σπάει το normalized MP3 σε chunks περίπου 5 λεπτών με μικρό overlap.
     Επιστρέφει chunks σε MP3 bytes.
     """
     try:
-        import av
+        from pydub import AudioSegment
+
+        audio = AudioSegment.from_file(io.BytesIO(audio_bytes), format="mp3")
+
+        chunk_ms = CHUNK_SEC * 1000
+        overlap_ms = OVERLAP_SEC * 1000
+        step_ms = max(chunk_ms - overlap_ms, 1)
 
         chunks: List[bytes] = []
-        in_buf = io.BytesIO(audio_bytes)
 
-        with av.open(in_buf) as container:
-            audio_stream = next((s for s in container.streams if s.type == "audio"), None)
-            if audio_stream is None:
-                return [audio_bytes], None
+        for start_ms in range(0, len(audio), step_ms):
+            end_ms = min(start_ms + chunk_ms, len(audio))
+            part = audio[start_ms:end_ms]
 
-            total_us = container.duration or 0
-            if total_us <= 0:
-                return [audio_bytes], None
+            out_buf = io.BytesIO()
+            part.export(
+                out_buf,
+                format="mp3",
+                bitrate=AUDIO_BITRATE,
+                parameters=["-ac", "1", "-ar", str(AUDIO_RATE)],
+            )
 
-            total_sec = int(total_us / 1_000_000)
-            start_points = list(range(0, total_sec, CHUNK_SEC - OVERLAP_SEC))
-
-            for start_sec in start_points:
-                end_sec = min(start_sec + CHUNK_SEC, total_sec)
-                out_buf = io.BytesIO()
-
-                container.seek(int(start_sec * 1_000_000))
-
-                with av.open(out_buf, mode="w", format="mp3") as out:
-                    ostream = out.add_stream("mp3", rate=AUDIO_RATE)
-                    ostream.bit_rate = AUDIO_BITRATE
-
-                    frames_written = 0
-                    for frame in container.decode(audio=0):
-                        if frame.pts is None:
-                            continue
-
-                        t = float(frame.pts * audio_stream.time_base)
-                        if t >= end_sec:
-                            break
-
-                        frame.pts = None
-                        for pkt in ostream.encode(frame):
-                            out.mux(pkt)
-                        frames_written += 1
-
-                    for pkt in ostream.encode():
-                        out.mux(pkt)
-
-                out_buf.seek(0)
-                data = out_buf.read()
-
-                if len(data) > 5000:
-                    chunks.append(data)
+            data = out_buf.getvalue()
+            if len(data) > 5000:
+                chunks.append(data)
 
         return chunks if chunks else [audio_bytes], None
 
     except ImportError:
-        return [audio_bytes], None
+        return [audio_bytes], "⚠️ Λείπει το `pydub`. Θα γίνει προσπάθεια αποστολής ως ένα αρχείο."
     except Exception as e:
         return [audio_bytes], f"⚠️ Δεν έγινε σωστό split. Θα σταλεί ως ένα αρχείο. Λεπτομέρεια: {e}"
 
@@ -246,7 +221,7 @@ def clean_transcript(text: str) -> str:
 def remove_overlap_repetition(full_text: str) -> str:
     """
     Ελαφρύ καθάρισμα από επαναλήψεις λόγω overlap.
-    Δεν είναι επιθετικό για να μη σβήσει χρήσιμο τεκτονικό κείμενο.
+    Δεν είναι επιθετικό, ώστε να μη σβήσει χρήσιμο κείμενο.
     """
     lines = [l.strip() for l in full_text.splitlines() if l.strip()]
     cleaned = []
@@ -266,6 +241,10 @@ def transcribe_chunk(chunk: bytes, chunk_idx: int, total: int) -> str:
     if not openai_key:
         return f"[❌ Chunk {chunk_idx + 1}: Δεν βρέθηκε OPENAI_API_KEY στα Streamlit Secrets]"
 
+    chunk_mb = mb_size(chunk)
+    if chunk_mb > MAX_OPENAI_CHUNK_MB:
+        return f"[❌ Chunk {chunk_idx + 1}: Το αρχείο είναι {chunk_mb:.1f}MB και ξεπερνά το ασφαλές όριο των {MAX_OPENAI_CHUNK_MB}MB]"
+
     try:
         from openai import OpenAI
 
@@ -282,17 +261,22 @@ def transcribe_chunk(chunk: bytes, chunk_idx: int, total: int) -> str:
                 response_format="text",
                 temperature=0,
             )
-        except Exception:
-            # fallback για accounts/libraries που δεν δέχονται ακόμα gpt-4o-transcribe
+        except Exception as primary_error:
             audio_file.seek(0)
-            result = client.audio.transcriptions.create(
-                model=TRANSCRIPTION_MODEL_FALLBACK,
-                file=audio_file,
-                language="el",
-                prompt=TRANSCRIPTION_PROMPT,
-                response_format="text",
-                temperature=0,
-            )
+            try:
+                result = client.audio.transcriptions.create(
+                    model=TRANSCRIPTION_MODEL_FALLBACK,
+                    file=audio_file,
+                    language="el",
+                    prompt=TRANSCRIPTION_PROMPT,
+                    response_format="text",
+                    temperature=0,
+                )
+            except Exception as fallback_error:
+                return (
+                    f"[❌ Chunk {chunk_idx + 1}: Απέτυχε η μεταγραφή. "
+                    f"Primary error: {primary_error}. Fallback error: {fallback_error}]"
+                )
 
         return clean_transcript(str(result))
 
@@ -302,11 +286,15 @@ def transcribe_chunk(chunk: bytes, chunk_idx: int, total: int) -> str:
         return f"[❌ Chunk {chunk_idx + 1}: {e}]"
 
 
-def transcribe_audio(audio_bytes: bytes, ext: str, progress_cb: Optional[Callable] = None) -> Tuple[str, Optional[str]]:
+def transcribe_audio(
+    audio_bytes: bytes,
+    ext: str,
+    progress_cb: Optional[Callable] = None,
+) -> Tuple[str, Optional[str]]:
     """
     Πλήρης μεταγραφή:
     1. normalize σε MP3
-    2. split
+    2. split σε chunks
     3. transcribe chunks
     4. clean/merge
     """
@@ -318,29 +306,38 @@ def transcribe_audio(audio_bytes: bytes, ext: str, progress_cb: Optional[Callabl
         return "", err
 
     if progress_cb:
-        progress_cb(12, "✂️ Διαχωρισμός ηχογράφησης σε ασφαλή τμήματα…")
+        progress_cb(12, f"✂️ Διαχωρισμός ηχογράφησης σε ασφαλή τμήματα… MP3: {mb_size(mp3_bytes):.1f}MB")
 
     chunks, split_warning = split_audio_to_chunks(mp3_bytes)
     n = len(chunks)
 
     transcripts = []
+    errors = []
+
     for i, chunk in enumerate(chunks):
+        chunk_mb = mb_size(chunk)
+
         if progress_cb:
             pct = 15 + int(65 * (i / max(n, 1)))
-            progress_cb(pct, f"🎧 Μεταγραφή τμήματος {i + 1}/{n}…")
+            progress_cb(pct, f"🎧 Μεταγραφή τμήματος {i + 1}/{n} — {chunk_mb:.1f}MB…")
 
         text = transcribe_chunk(chunk, i, n)
         if text:
+            if text.startswith("[❌"):
+                errors.append(text)
             transcripts.append(f"=== Τμήμα {i + 1}/{n} ===\n{text}")
 
     full_transcript = "\n\n".join(transcripts)
     full_transcript = clean_transcript(full_transcript)
     full_transcript = remove_overlap_repetition(full_transcript)
 
+    warnings = []
     if split_warning:
-        return full_transcript, split_warning
+        warnings.append(split_warning)
+    if errors:
+        warnings.append("⚠️ Κάποια chunks δεν μεταγράφηκαν σωστά. Δείτε την ακατέργαστη μεταγραφή.")
 
-    return full_transcript, None
+    return full_transcript, "\n".join(warnings) if warnings else None
 
 # ══════════════════════════════════════════════════════════════
 # CLAUDE → ΠΡΑΚΤΙΚΑ
@@ -444,7 +441,12 @@ def format_into_praktiko(transcript: str, context: str) -> Tuple[Optional[Dict[s
         return None, f"❌ Σφάλμα σύνταξης πρακτικών: {e}"
 
 
-def process_audio_to_praktiko(audio_bytes: bytes, ext: str, context: str, progress_cb: Optional[Callable] = None):
+def process_audio_to_praktiko(
+    audio_bytes: bytes,
+    ext: str,
+    context: str,
+    progress_cb: Optional[Callable] = None,
+):
     if progress_cb:
         progress_cb(2, "🚀 Έναρξη επεξεργασίας…")
 
@@ -500,7 +502,6 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
         if alias not in pdfmetrics.getRegisteredFontNames() and os.path.exists(path):
             pdfmetrics.registerFont(TTFont(alias, path))
 
-    # fallback αν δεν υπάρχουν fonts
     font_sans = "DSS" if "DSS" in pdfmetrics.getRegisteredFontNames() else "Helvetica"
     font_sans_bold = "DSSB" if "DSSB" in pdfmetrics.getRegisteredFontNames() else "Helvetica-Bold"
     font_serif = "DSR" if "DSR" in pdfmetrics.getRegisteredFontNames() else "Helvetica"
@@ -731,10 +732,22 @@ with tab_main:
 
     if audio_file:
         raw_bytes = audio_file.getvalue()
-        size_mb = len(raw_bytes) / (1024 * 1024)
+        size_mb = mb_size(raw_bytes)
         ext = audio_file.name.rsplit(".", 1)[-1].lower()
 
-        st.audio(audio_file)
+        show_audio_preview = st.checkbox(
+            "🎧 Εμφάνιση audio player",
+            value=False,
+            help="Για μεγάλα αρχεία, αφήστε το κλειστό όσο διορθώνετε τη μεταγραφή, για να μη βαραίνει το Streamlit."
+        )
+
+        if show_audio_preview:
+            with st.expander("🎧 Προεπισκόπηση ηχογράφησης", expanded=True):
+                st.warning(
+                    "Για μεγάλα αρχεία, μην έχετε ανοιχτό ταυτόχρονα το audio player "
+                    "και την ακατέργαστη μεταγραφή."
+                )
+                st.audio(raw_bytes, format=f"audio/{ext}")
 
         if size_mb > MAX_MB_RAW:
             st.error(f"⛔ Το αρχείο είναι {size_mb:.1f}MB και ξεπερνά το όριο {MAX_MB_RAW}MB.")
@@ -758,6 +771,13 @@ with tab_main:
         use_container_width=True,
         disabled=not ready,
     ):
+        st.session_state["last_sel_βαθμ"] = sel_βαθμ
+        st.session_state["last_sel_ημερ"] = sel_ημερ.strftime('%d/%m/%Y')
+        st.session_state["last_sel_σεβ"] = sel_σεβ
+        st.session_state["last_sel_γραμ"] = sel_γραμ
+        st.session_state["last_sel_ρητ"] = sel_ρητ
+        st.session_state["last_sel_extra"] = sel_extra
+
         ctx = (
             f"Βαθμός: {sel_βαθμ}\n"
             f"Βαθμός σε γενική: {ΒΑΘΜΟΙ_GEN[sel_βαθμ]}\n"
@@ -768,7 +788,7 @@ with tab_main:
             f"Επιπλέον πληροφορίες: {sel_extra or '-'}"
         )
 
-        size_mb = len(st.session_state["ready_audio"]) / (1024 * 1024)
+        size_mb = mb_size(st.session_state["ready_audio"])
         progress_bar = st.progress(0)
         status_text = st.empty()
 
@@ -778,12 +798,15 @@ with tab_main:
 
         progress_cb(1, f"🚀 Επεξεργασία αρχείου {size_mb:.1f}MB…")
 
-        result, err = process_audio_to_praktiko(
-            st.session_state["ready_audio"],
-            st.session_state["ready_ext"],
-            ctx,
-            progress_cb=progress_cb,
-        )
+        try:
+            result, err = process_audio_to_praktiko(
+                st.session_state["ready_audio"],
+                st.session_state["ready_ext"],
+                ctx,
+                progress_cb=progress_cb,
+            )
+        except Exception as e:
+            result, err = None, f"❌ Το Streamlit σταμάτησε την επεξεργασία λόγω σφάλματος: {e}"
 
         status_text.empty()
         progress_bar.progress(100)
@@ -809,19 +832,49 @@ with tab_main:
                 result["ημερομηνία"] = sel_ημερ.strftime("%d/%m/%Y")
 
             st.session_state["praktiko"] = result
-            st.success("✅ Έτοιμο. Ελέγξτε πρώτα την ακατέργαστη μεταγραφή και μετά τα πρακτικά.")
+            st.session_state.pop("editable_raw_transcript", None)
+            st.success("✅ Έτοιμο. Ελέγξτε/διορθώστε πρώτα την ακατέργαστη μεταγραφή και μετά τα πρακτικά.")
 
     if "praktiko" in st.session_state:
         raw_tr = st.session_state["praktiko"].get("μεταγραφή_λέξη_προς_λέξη", "")
 
         if raw_tr:
             with st.expander("📄 Ακατέργαστη μεταγραφή", expanded=False):
-                st.text_area(
+                edit_limit = 50000
+
+                if "editable_raw_transcript" not in st.session_state:
+                    st.session_state["editable_raw_transcript"] = raw_tr[:edit_limit]
+
+                edited_raw = st.text_area(
                     "Ακατέργαστη μεταγραφή",
-                    raw_tr,
-                    height=300,
+                    st.session_state["editable_raw_transcript"],
+                    height=400,
                     label_visibility="collapsed",
+                    help="Μπορείτε να διορθώσετε εδώ τη μεταγραφή. Για πολύ μεγάλα κείμενα εμφανίζεται ασφαλές τμήμα έως 50.000 χαρακτήρες."
                 )
+
+                st.session_state["editable_raw_transcript"] = edited_raw
+                st.session_state["praktiko"]["μεταγραφή_λέξη_προς_λέξη"] = edited_raw
+
+                if len(raw_tr) > edit_limit:
+                    st.warning(
+                        "Η πλήρης μεταγραφή είναι μεγάλη. Για λόγους σταθερότητας, επεξεργάζεστε εδώ μόνο τους πρώτους 50.000 χαρακτήρες. "
+                        "Κατεβάστε το πλήρες .txt αν θέλετε πλήρη χειροκίνητη διόρθωση εκτός Streamlit."
+                    )
+
+                if st.button("🔄 Ενημέρωση Πρακτικού από διορθωμένη μεταγραφή", use_container_width=True):
+                    ctx_update = (
+                        f"Βαθμός: {st.session_state.get('last_sel_βαθμ', '')}\n"
+                        f"Ημερομηνία: {st.session_state.get('last_sel_ημερ', '')}\n"
+                        f"Επιπλέον πληροφορίες: διορθωμένη ακατέργαστη μεταγραφή από τον χρήστη"
+                    )
+                    with st.spinner("Σύνταξη νέου πρακτικού από τη διορθωμένη μεταγραφή…"):
+                        updated_result, updated_err = format_into_praktiko(edited_raw, ctx_update)
+                    if updated_err and not updated_result:
+                        st.error(updated_err)
+                    elif updated_result:
+                        st.session_state["praktiko"].update(updated_result)
+                        st.success("✅ Το πρακτικό ενημερώθηκε από τη διορθωμένη μεταγραφή.")
                 st.download_button(
                     "⬇️ Λήψη μεταγραφής .txt",
                     raw_tr.encode("utf-8"),
@@ -839,10 +892,13 @@ with tab_main:
         with col_gen:
             if st.button("📄 Δημιουργία PDF Πρακτικού", type="primary", use_container_width=True):
                 with st.spinner("Δημιουργία PDF…"):
-                    pdf = generate_praktiko_pdf(edited)
-                st.session_state["pdf_bytes"] = pdf.getvalue()
-                st.session_state["pdf_label"] = (edited.get("ημερομηνία", "") or str(date.today())).replace("/", "_")
-                st.success("✅ PDF έτοιμο.")
+                    try:
+                        pdf = generate_praktiko_pdf(edited)
+                        st.session_state["pdf_bytes"] = pdf.getvalue()
+                        st.session_state["pdf_label"] = (edited.get("ημερομηνία", "") or str(date.today())).replace("/", "_")
+                        st.success("✅ PDF έτοιμο.")
+                    except Exception as e:
+                        st.error(f"❌ Σφάλμα δημιουργίας PDF: {e}")
 
         with col_dl:
             if "pdf_bytes" in st.session_state:
@@ -886,14 +942,23 @@ with tab_help:
     reportlab>=4.0
     anthropic>=0.25
     openai>=1.50.0
-    av
-    pydub
+    pydub>=0.25.1
+    ```
+
+    ## packages.txt
+
+    Για να δουλεύει σωστά το pydub στο Streamlit Cloud, καλό είναι να υπάρχει:
+
+    ```txt
+    ffmpeg
     ```
 
     ## Σημαντικές πρακτικές για καλύτερη μεταγραφή
 
     - Το κινητό να είναι κοντά στους ομιλητές.
-    - Προτιμήστε m4a ή mp3.
+    - Προτιμήστε WAV, M4A ή MP3 με καθαρό ήχο.
     - Μειώστε θόρυβο, μουσική, ψιθύρους και παράλληλες συζητήσεις.
     - Στο πεδίο "Επιπλέον πλαίσιο" γράψτε ονόματα, θέματα και γνωστούς όρους.
+    - Για μεγάλες συνεδριάσεις, προτιμήστε αρχείο κάτω από 300MB.
     """)
+
