@@ -15,6 +15,10 @@
 import sys
 sys.path.append("..")
 
+# Αποσιώπηση SyntaxWarnings από το εσωτερικό του pydub (Python 3.14)
+import warnings
+warnings.filterwarnings("ignore", category=SyntaxWarning, module="pydub")
+
 import io
 import json
 import os
@@ -331,13 +335,13 @@ def transcribe_audio(
     full_transcript = clean_transcript(full_transcript)
     full_transcript = remove_overlap_repetition(full_transcript)
 
-    warnings = []
+    warnings_out = []
     if split_warning:
-        warnings.append(split_warning)
+        warnings_out.append(split_warning)
     if errors:
-        warnings.append("⚠️ Κάποια chunks δεν μεταγράφηκαν σωστά. Δείτε την ακατέργαστη μεταγραφή.")
+        warnings_out.append("⚠️ Κάποια chunks δεν μεταγράφηκαν σωστά. Δείτε την ακατέργαστη μεταγραφή.")
 
-    return full_transcript, "\n".join(warnings) if warnings else None
+    return full_transcript, "\n".join(warnings_out) if warnings_out else None
 
 # ══════════════════════════════════════════════════════════════
 # CLAUDE → ΠΡΑΚΤΙΚΑ
@@ -961,4 +965,3 @@ with tab_help:
     - Στο πεδίο "Επιπλέον πλαίσιο" γράψτε ονόματα, θέματα και γνωστούς όρους.
     - Για μεγάλες συνεδριάσεις, προτιμήστε αρχείο κάτω από 300MB.
     """)
-
