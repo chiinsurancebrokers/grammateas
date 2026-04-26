@@ -52,8 +52,8 @@ GOLD_DARK = (120, 96, 52)
 BLACK = (5, 5, 5)
 WHITE = (255, 255, 255)
 OFFWHITE = (250, 249, 246)
-PARCHMENT = (248, 244, 235)
-PARCHMENT_DARK = (226, 215, 190)
+PARCHMENT = (255, 255, 255)
+PARCHMENT_DARK = (235, 235, 235)
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FONTS = os.path.join(BASE, "fonts")
@@ -177,26 +177,26 @@ def paste_asset(
 # ══════════════════════════════════════════════════════════════
 # LUXURY BACKGROUND
 # ══════════════════════════════════════════════════════════════
-def create_luxury_background() -> Image.Image:
-    """Δημιουργεί ελαφρύ parchment / luxury paper background."""
-    bg = Image.new("RGBA", (PAGE_W, PAGE_H), PARCHMENT + (255,))
-    pix = bg.load()
-    random.seed(84)
-    for _ in range(12000):
-        x = random.randrange(0, PAGE_W)
-        y = random.randrange(0, PAGE_H)
-        delta = random.randrange(-7, 8)
-        r = max(0, min(255, PARCHMENT[0] + delta))
-        g = max(0, min(255, PARCHMENT[1] + delta))
-        b = max(0, min(255, PARCHMENT[2] + delta))
-        pix[x, y] = (r, g, b, 255)
+def remove_white_bg(img_bytes: bytes, threshold: int = 220) -> bytes:
+    """Κάνει διαφανές το λευκό/ανοιχτό background μιας εικόνας."""
+    img = Image.open(io.BytesIO(img_bytes)).convert("RGBA")
+    data = img.getdata()
+    new_data = []
+    for r, g, b, a in data:
+        if r >= threshold and g >= threshold and b >= threshold:
+            new_data.append((r, g, b, 0))
+        else:
+            new_data.append((r, g, b, a))
+    img.putdata(new_data)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf.read()
 
-    # subtle center glow
-    overlay = Image.new("RGBA", (PAGE_W, PAGE_H), (255, 255, 255, 0))
-    od = ImageDraw.Draw(overlay)
-    od.ellipse((-250, 120, PAGE_W + 250, PAGE_H - 80), fill=(255, 255, 255, 48))
-    overlay = overlay.filter(ImageFilter.GaussianBlur(90))
-    bg.alpha_composite(overlay)
+
+() -> Image.Image:
+    """Καθαρό λευκό background."""
+    bg = Image.new("RGBA", (PAGE_W, PAGE_H), (255, 255, 255, 255))
     return bg
 
 # ══════════════════════════════════════════════════════════════
@@ -261,7 +261,7 @@ def luxury_section_label(draw: ImageDraw.ImageDraw, y: int, text: str, fnt: Imag
     y1 = y - 8
     x2 = x1 + w
     y2 = y1 + h
-    draw.rounded_rectangle([x1, y1, x2, y2], radius=4, fill=(252, 250, 244), outline=NAVY, width=1)
+    draw.rounded_rectangle([x1, y1, x2, y2], radius=4, fill=(255, 255, 255), outline=NAVY, width=1)
     draw.line([(x1 - 150, y1 + h // 2), (x1 - 15, y1 + h // 2)], fill=GOLD_DARK, width=1)
     draw.line([(x2 + 15, y1 + h // 2), (x2 + 150, y1 + h // 2)], fill=GOLD_DARK, width=1)
     center_at(draw, PAGE_W // 2, y, text, fnt, NAVY)
@@ -357,14 +357,22 @@ def process_acropolis(photo_bytes: bytes, box_w: int, box_h: int) -> Image.Image
     md.rounded_rectangle([0, 0, box_w, box_h], radius=18, fill=255)
     mask = mask.filter(ImageFilter.GaussianBlur(5))
 
-    # soft bottom fade, not too strong
+    # soft left/right/bottom fade
     alpha = mask.copy()
-    fade_start = int(box_h * 0.88)
-    for yy in range(fade_start, box_h):
-        t = (yy - fade_start) / max(1, box_h - fade_start)
+    fade_h_start = int(box_h * 0.88)
+    for yy in range(fade_h_start, box_h):
+        t = (yy - fade_h_start) / max(1, box_h - fade_h_start)
         val = int(255 * (1 - 0.28 * t))
         for xx in range(box_w):
             alpha.putpixel((xx, yy), min(alpha.getpixel((xx, yy)), val))
+
+    fade_side = int(box_w * 0.12)
+    for xx in range(fade_side):
+        t = xx / fade_side
+        val = int(255 * t)
+        for yy in range(box_h):
+            alpha.putpixel((xx, yy), min(alpha.getpixel((xx, yy)), val))
+            alpha.putpixel((box_w - 1 - xx, yy), min(alpha.getpixel((box_w - 1 - xx, yy)), val))
 
     rgba.putalpha(alpha)
     return rgba
@@ -377,7 +385,7 @@ def draw_photo_frame(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int) 
     mount = [x - 7, y - 7, x + w + 7, y + h + 7]
     inner = [x - 2, y - 2, x + w + 2, y + h + 2]
 
-    draw.rounded_rectangle(outer, radius=16, fill=(255, 254, 249), outline=NAVY, width=2)
+    draw.rounded_rectangle(outer, radius=16, fill=(255, 255, 255), outline=NAVY, width=2)
     draw.rounded_rectangle(mount, radius=12, outline=GOLD_DARK, width=2)
     draw.rounded_rectangle(inner, radius=8, outline=BLACK, width=2)
 
@@ -452,10 +460,10 @@ def create_invitation(
     else:
         draw_sq_compass(draw, PAGE_W - INNER_X - 25, 205, 44, NAVY)
 
-    # Photo
-    photo_x = INNER_X - 42
+    # Photo — aligned με το header frame
+    photo_x = INNER_X
     photo_y = y + 18
-    photo_w = PAGE_W - photo_x * 2
+    photo_w = PAGE_W - INNER_X * 2
     photo_h = 440
     raw_photo = photo_bytes or load_asset("acropolis-photo.jpg")
 
@@ -545,11 +553,12 @@ def create_invitation(
         center_at(draw, sig_rx, line_y + 10, secretary.strip().upper(), f_sig_name, NAVY)
     # ─────────────────────────────────────────────────────────────
 
-    # ── Κεντρική σφραγίδα — αποκλειστικά akropolis-seal.png ─────
+    # ── Κεντρική σφραγίδα — αφαίρεση λευκού bg ──────────────────
     symbol_box_w, symbol_box_h = 190, 150
     symbol_x = (PAGE_W - symbol_box_w) // 2
     symbol_y = sig_y + 3
-    paste_asset(img, seal_bytes, symbol_x, symbol_y, symbol_box_w, symbol_box_h)
+    clean_seal = remove_white_bg(seal_bytes) if seal_bytes else None
+    paste_asset(img, clean_seal, symbol_x, symbol_y, symbol_box_w, symbol_box_h)
     # ─────────────────────────────────────────────────────────────
 
     y = line_y + 100
@@ -563,7 +572,7 @@ def create_invitation(
     box_h = 60 + len(next_sessions[:4]) * 36 + 24
     box_y2 = min(box_y1 + box_h, PAGE_H - 160)
 
-    draw.rounded_rectangle([box_x1, box_y1, box_x2, box_y2], radius=12, outline=BLACK, width=2, fill=(255, 254, 249))
+    draw.rounded_rectangle([box_x1, box_y1, box_x2, box_y2], radius=12, outline=BLACK, width=2, fill=(255, 255, 255))
     draw.rounded_rectangle([box_x1 + 5, box_y1 + 5, box_x2 - 5, box_y2 - 5], radius=10, outline=NAVY, width=1)
     draw.rounded_rectangle([box_x1 + 9, box_y1 + 9, box_x2 - 9, box_y2 - 9], radius=8, outline=(206, 190, 150), width=1)
 
