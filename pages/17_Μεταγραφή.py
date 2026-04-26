@@ -801,19 +801,14 @@ with tab_main:
         st.session_state["last_sel_ρητ"] = sel_ρητ
         st.session_state["last_sel_extra"] = sel_extra
 
+        # ✅ ΔΙΟΡΘΩΣΗ: \n αντί για literal newlines μέσα στο f-string
         ctx = (
-            f"Βαθμός: {sel_βαθμ}
-"
-            f"Βαθμός σε γενική: {ΒΑΘΜΟΙ_GEN[sel_βαθμ]}
-"
-            f"Ημερομηνία: {sel_ημερ.strftime('%d/%m/%Y')}
-"
-            f"Σεβ∴ Διδ∴: {sel_σεβ}
-"
-            f"Γραμματεύς: {sel_γραμ}
-"
-            f"Ρήτωρ: {sel_ρητ}
-"
+            f"Βαθμός: {sel_βαθμ}\n"
+            f"Βαθμός σε γενική: {ΒΑΘΜΟΙ_GEN[sel_βαθμ]}\n"
+            f"Ημερομηνία: {sel_ημερ.strftime('%d/%m/%Y')}\n"
+            f"Σεβ∴ Διδ∴: {sel_σεβ}\n"
+            f"Γραμματεύς: {sel_γραμ}\n"
+            f"Ρήτωρ: {sel_ρητ}\n"
             f"Επιπλέον πληροφορίες: {sel_extra or '-'}"
         )
 
@@ -892,11 +887,10 @@ with tab_main:
                     )
 
                 if st.button("🔄 Ενημέρωση Πρακτικού από διορθωμένη μεταγραφή", use_container_width=True):
+                    # ✅ ΔΙΟΡΘΩΣΗ: \n αντί για literal newlines μέσα στο f-string
                     ctx_update = (
-                        f"Βαθμός: {st.session_state.get('last_sel_βαθμ', '')}
-"
-                        f"Ημερομηνία: {st.session_state.get('last_sel_ημερ', '')}
-"
+                        f"Βαθμός: {st.session_state.get('last_sel_βαθμ', '')}\n"
+                        f"Ημερομηνία: {st.session_state.get('last_sel_ημερ', '')}\n"
                         f"Επιπλέον πληροφορίες: διορθωμένη ακατέργαστη μεταγραφή από τον χρήστη"
                     )
                     with st.spinner("Σύνταξη νέου πρακτικού από τη διορθωμένη μεταγραφή…"):
