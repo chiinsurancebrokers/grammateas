@@ -1367,93 +1367,241 @@ with tab_fill:
         key="extra_notes",
     )
 
-    # ── ΚΟΥΜΠΙ ΔΗΜΙΟΥΡΓΙΑΣ ────────────────────────────────────
+    # ── ΚΟΥΜΠΙ ΣΥΜΠΛΗΡΩΣΗΣ ───────────────────────────────────
     st.markdown("---")
-    can_run = bool(get_anthropic_key())
-    if not can_run:
-        st.error("❌ Δεν βρέθηκε ANTHROPIC_API_KEY. Προσθέστε το στα Streamlit Secrets.")
 
     if st.button(
-        "🤖 Συμπλήρωση Εντύπων με Claude",
+        "🤖 Αυτόματη Συμπλήρωση από Μητρώο",
         type="primary",
         use_container_width=True,
-        disabled=not can_run,
         key="run_fill",
     ):
-        stoaa_info = (
-            f"Σ∴ Στ∴ {STOAA_NAME} υπ' αρ. {STOAA_NUMBER} εν Αν∴ {STOAA_ANATOLI}∴"
-        )
+        # Αποθηκεύουμε τα fill specs στο session_state
+        stoaa_data = {"name": STOAA_NAME, "number": STOAA_NUMBER, "anatoli": STOAA_ANATOLI}
 
-        # Convert dates to string
-        data_for_claude = {}
+        data_for_fill = {}
         for k, v in collected.items():
-            data_for_claude[k] = str(v) if v is not None else ""
-        if extra_notes:
-            data_for_claude["extra_notes"] = extra_notes
+            data_for_fill[k] = str(v) if v is not None else ""
 
-        filled_files: List[Tuple[str, bytes]] = []
-        progress = st.progress(0)
-        n_forms = len(proc["forms"])
+        # Για εκλογές: φτιάχνουμε spec αξιωματικών
+        if proc["code"] == "ekloges":
+            officials_spec = []
+            for axioma_text, field_key in [
+                ("ΣΕΒΑΣΜΙΟΣ",            "ax_sev"),
+                ("Α΄ ΕΠΟΠΤΗΣ",           "ax_a_ep"),
+                ("Β΄ ΕΠΟΠΤΗΣ",           "ax_b_ep"),
+                ("ΡΗΤΩΡ",                "ax_rhtor"),
+                ("ΓΡΑΜΜ. - ΣΦΡΑΓΙΔ.",   "ax_gramm"),
+                ("Α΄ ΔΟΚΙΜΑΣΤΗΣ",        "ax_a_dok"),
+                ("ΤΑΜΙΑΣ",               "ax_tamias"),
+                ("ΕΛΕΟΝΟΜΟΣ",            "ax_eleon"),
+                ("ΤΕΛΕΤΑΡΧΗΣ",           "ax_tel"),
+                ("ΣΤΕΓΑΣΤΗΣ",            "ax_steg"),
+                ("Β΄ ΔΟΚΙΜΑΣΤΗΣ",        "ax_b_dok"),
+                ("ΑΡΧΙΤ. - ΑΡΧΙΤΡ.",    "ax_arxitekt"),
+                ("ΑΡΧΕΙΟΦ. - ΒΙΒΛΙΟΦ.", "ax_arxif"),
+                ("ΞΙΦΟΦ. - ΣΗΜΑΙΟΦ.",   "ax_xifok"),
+                ("ΡΗΤΩΡ (Πρόσθ.)",       "pr_rhtor"),
+                ("ΓΡΑΜΜ. - ΣΦΡΑΓΙΔ. (Πρόσθ.)", "pr_gramm"),
+                ("ΤΑΜΙΑΣ (Πρόσθ.)",      "pr_tamias"),
+                ("ΕΛΕΟΝΟΜΟΣ (Πρόσθ.)",   "pr_eleon"),
+                ("ΤΕΛΕΤΑΡΧΗΣ (Πρόσθ.)",  "pr_tel"),
+                ("ΜΕΛΟΣ ΕΞ.ΕΠ. Α",       "ex_1"),
+                ("ΜΕΛΟΣ ΕΞ.ΕΠ. Β",       "ex_2"),
+                ("ΜΕΛΟΣ ΕΞ.ΕΠ. Γ",       "ex_3"),
+            ]:
+                m = member_refs.get(field_key)
+                officials_spec.append({
+                    "Αξίωμα": axioma_text,
+                    "Επώνυμο": m.get("επώνυμο", "") if m else "",
+                    "Όνομα": m.get("όνομα", "") if m else "",
+                    "Πατρώνυμο": m.get("πατρώνυμο", "") if m else "",
+                    "Α.Μ.Μ.Σ.": str(m.get("αρ_μητρώου_μσ", "") or "") if m else "",
+                    "Κινητό": m.get("κινητό", "") or m.get("κινητο", "") if m else "",
+                    "Email": m.get("email", "") if m else "",
+                    "Διεύθυνση": m.get("διεύθυνση", "") if m else "",
+                    "Πόλη": m.get("πόλη", "") if m else "",
+                    "_field_key": field_key,
+                })
 
-        stoaa_data = {
-            "name": STOAA_NAME,
-            "number": STOAA_NUMBER,
-            "anatoli": STOAA_ANATOLI,
+            st.session_state[f"fill_officials_{proc['code']}"] = officials_spec
+            st.session_state[f"fill_header_{proc['code']}"] = {
+                "Τεκτ. Διετία": data_for_fill.get("ekl_diettia", "2024-2026"),
+                "Ημ/νία Αρχαιρεσιών": data_for_fill.get("ekl_imerominia", ""),
+                "Ψηφίσαντες": data_for_fill.get("ekl_psifisantes", ""),
+                "Παρόντες": data_for_fill.get("ekl_paronton", ""),
+            }
+
+        st.session_state[f"fill_data_{proc['code']}"] = data_for_fill
+        st.session_state[f"fill_members_{proc['code']}"] = {
+            k: v for k, v in member_refs.items() if v
         }
+        st.session_state[f"fill_stoaa_{proc['code']}"] = stoaa_data
+        st.success("✅ Δεδομένα φορτώθηκαν. Ελέγξτε/διορθώστε παρακάτω και κατεβάστε.")
 
-        for i, form_info in enumerate(proc["forms"]):
-            path = os.path.join(FORMS_ROOT, form_info["file"])
-            st.markdown(f"**⚙️ Επεξεργασία: {form_info['name']}…**")
-            progress.progress(int((i / n_forms) * 85))
+    # ══════════════════════════════════════════════════════════
+    # EDITOR — Εμφανίζεται αν υπάρχουν δεδομένα στο session_state
+    # ══════════════════════════════════════════════════════════
+    if f"fill_data_{proc['code']}" in st.session_state:
+        st.markdown("---")
+        st.markdown("### ✏️ Επεξεργασία & Λήψη Εντύπων")
+        st.caption("Διορθώστε χειροκίνητα οποιοδήποτε πεδίο και μετά κατεβάστε.")
 
-            if not os.path.exists(path):
-                st.warning(f"⚠️ Δεν βρέθηκε: {path}")
-                continue
+        stoaa_data = st.session_state.get(f"fill_stoaa_{proc['code']}",
+                                          {"name": STOAA_NAME, "number": STOAA_NUMBER,
+                                           "anatoli": STOAA_ANATOLI})
+        data_for_fill = st.session_state[f"fill_data_{proc['code']}"]
+        saved_members = st.session_state.get(f"fill_members_{proc['code']}", {})
 
-            try:
-                with st.spinner(f"Συμπλήρωση «{form_info['name']}»…"):
-                    filled_bytes = fill_docx_smart(
-                        template_path=path,
-                        form_file_key=form_info["file"],
-                        collected=data_for_claude,
-                        members_by_field=member_refs,
-                        stoaa_data=stoaa_data,
-                    )
+        # ── ΕΚΛΟΓΕΣ: Editable grid αξιωματικών ──────────────
+        if proc["code"] == "ekloges":
+            header_data = st.session_state.get(f"fill_header_{proc['code']}", {})
+            officials_spec = st.session_state.get(f"fill_officials_{proc['code']}", [])
 
-                fname = os.path.basename(form_info["file"])
-                filled_files.append((fname, filled_bytes))
+            # Επεξεργασία header fields
+            st.markdown("#### 🏛️ Στοιχεία Αρχαιρεσιών")
+            hcols = st.columns(4)
+            edited_header = {}
+            for i, (k, v) in enumerate(header_data.items()):
+                edited_header[k] = hcols[i % 4].text_input(k, value=str(v),
+                                                             key=f"hdr_{proc['code']}_{k}")
+            st.session_state[f"fill_header_{proc['code']}"] = edited_header
 
-                st.download_button(
-                    f"⬇️ {form_info['name']}",
-                    data=filled_bytes,
-                    file_name=fname,
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    key=f"dl_filled_{i}",
-                    use_container_width=True,
-                )
-                st.success(f"✅ {form_info['name']} — έτοιμο")
+            # Επεξεργασία πίνακα αξιωματικών
+            st.markdown("#### 👥 Πίνακας Αξιωματικών")
+            st.caption("Επεξεργαστείτε απευθείας οποιοδήποτε κελί.")
 
-            except Exception as e:
-                st.error(f"❌ Σφάλμα δημιουργίας εντύπου: {e}")
+            import pandas as pd
+            df = pd.DataFrame([
+                {k: v for k, v in row.items() if k != "_field_key"}
+                for row in officials_spec
+            ])
 
-        progress.progress(100)
-
-        # ZIP όλων
-        if len(filled_files) > 1:
-            zip_data = create_zip(filled_files)
-            st.markdown("---")
-            st.download_button(
-                f"📦 Λήψη όλων των συμπληρωμένων εντύπων (.zip)",
-                data=zip_data,
-                file_name=f"εντυπα_{proc['code']}_{date.today().strftime('%Y%m%d')}.zip",
-                mime="application/zip",
+            edited_df = st.data_editor(
+                df,
                 use_container_width=True,
-                key="dl_all_zip",
+                hide_index=True,
+                column_config={
+                    "Αξίωμα": st.column_config.TextColumn("Αξίωμα", disabled=True, width="medium"),
+                    "Επώνυμο": st.column_config.TextColumn("Επώνυμο", width="medium"),
+                    "Όνομα": st.column_config.TextColumn("Όνομα", width="medium"),
+                    "Πατρώνυμο": st.column_config.TextColumn("Πατρώνυμο", width="small"),
+                    "Α.Μ.Μ.Σ.": st.column_config.TextColumn("Α.Μ.Μ.Σ.", width="small"),
+                    "Κινητό": st.column_config.TextColumn("Κινητό", width="small"),
+                    "Email": st.column_config.TextColumn("Email", width="medium"),
+                    "Διεύθυνση": st.column_config.TextColumn("Διεύθυνση", width="medium"),
+                    "Πόλη": st.column_config.TextColumn("Πόλη", width="small"),
+                },
+                key=f"editor_grid_{proc['code']}",
+                num_rows="fixed",
             )
-            st.success(
-                f"✅ Δημιουργήθηκαν {len(filled_files)} έντυπα. "
-                "Ελέγξτε και υπογράψτε πριν την αποστολή στη Μεγ. Γεν. Γραμματεία."
-            )
+
+            # Αποθήκευση επεξεργασμένου πίνακα
+            updated_officials = []
+            for i, row in edited_df.iterrows():
+                entry = row.to_dict()
+                entry["_field_key"] = officials_spec[i]["_field_key"] if i < len(officials_spec) else ""
+                updated_officials.append(entry)
+            st.session_state[f"fill_officials_{proc['code']}"] = updated_officials
+
+        else:
+            # Για μη-εκλογικά: απλά text inputs
+            st.markdown("#### 📝 Στοιχεία Εντύπου")
+            edit_cols = st.columns(2)
+            edited_data = {}
+            for i, (k, v) in enumerate(data_for_fill.items()):
+                if k == "extra_notes":
+                    continue
+                edited_data[k] = edit_cols[i % 2].text_input(
+                    k, value=str(v), key=f"edit_{proc['code']}_{k}")
+            st.session_state[f"fill_data_{proc['code']}"] = edited_data
+
+        # ── ΚΟΥΜΠΙ ΔΗΜΙΟΥΡΓΙΑΣ ΕΝΤΥΠΩΝ ───────────────────────
+        st.markdown("---")
+        st.markdown("### 📄 Δημιουργία & Λήψη Εντύπων")
+
+        if st.button("📄 Δημιουργία εντύπων από τα παραπάνω δεδομένα",
+                     type="primary", use_container_width=True, key="gen_from_edit"):
+
+            filled_files: List[Tuple[str, bytes]] = []
+            progress = st.progress(0)
+            n_forms = len(proc["forms"])
+
+            # Ανακατασκευή member_refs από τον edited grid (για εκλογές)
+            if proc["code"] == "ekloges":
+                updated_spec = st.session_state.get(f"fill_officials_{proc['code']}", [])
+                # Φτιάχνουμε ψεύτικα member dicts από τον edited πίνακα
+                rebuilt_members: Dict[str, Optional[Dict]] = {}
+                for row in updated_spec:
+                    fk = row.get("_field_key", "")
+                    if fk:
+                        rebuilt_members[fk] = {
+                            "επώνυμο":       row.get("Επώνυμο", ""),
+                            "όνομα":         row.get("Όνομα", ""),
+                            "πατρώνυμο":     row.get("Πατρώνυμο", ""),
+                            "αρ_μητρώου_μσ": row.get("Α.Μ.Μ.Σ.", ""),
+                            "κινητό":        row.get("Κινητό", ""),
+                            "email":         row.get("Email", ""),
+                            "διεύθυνση":     row.get("Διεύθυνση", ""),
+                            "πόλη":          row.get("Πόλη", ""),
+                        }
+                # Ενημέρωση header data
+                hdr = st.session_state.get(f"fill_header_{proc['code']}", {})
+                final_collected = dict(data_for_fill)
+                final_collected["ekl_diettia"] = hdr.get("Τεκτ. Διετία", "2024-2026")
+                final_collected["ekl_imerominia"] = hdr.get("Ημ/νία Αρχαιρεσιών", "")
+                final_collected["ekl_psifisantes"] = hdr.get("Ψηφίσαντες", "")
+                final_collected["ekl_paronton"] = hdr.get("Παρόντες", "")
+            else:
+                rebuilt_members = saved_members
+                final_collected = st.session_state.get(f"fill_data_{proc['code']}", data_for_fill)
+
+            for i, form_info in enumerate(proc["forms"]):
+                path = os.path.join(FORMS_ROOT, form_info["file"])
+                progress.progress(int((i / n_forms) * 85))
+
+                if not os.path.exists(path):
+                    st.warning(f"⚠️ Δεν βρέθηκε: {path}")
+                    continue
+
+                try:
+                    with st.spinner(f"Συμπλήρωση «{form_info['name']}»…"):
+                        filled_bytes = fill_docx_smart(
+                            template_path=path,
+                            form_file_key=form_info["file"],
+                            collected=final_collected,
+                            members_by_field=rebuilt_members,
+                            stoaa_data=stoaa_data,
+                        )
+
+                    fname = os.path.basename(form_info["file"])
+                    filled_files.append((fname, filled_bytes))
+
+                    st.download_button(
+                        f"⬇️ {form_info['name']}",
+                        data=filled_bytes,
+                        file_name=fname,
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        key=f"dl_filled_{i}_{proc['code']}",
+                        use_container_width=True,
+                    )
+                    st.success(f"✅ {form_info['name']}")
+
+                except Exception as e:
+                    st.error(f"❌ {form_info['name']}: {e}")
+
+            progress.progress(100)
+
+            if len(filled_files) > 1:
+                zip_data = create_zip(filled_files)
+                st.download_button(
+                    "📦 Λήψη όλων (.zip)",
+                    data=zip_data,
+                    file_name=f"εντυπα_{proc['code']}_{date.today().strftime('%Y%m%d')}.zip",
+                    mime="application/zip",
+                    use_container_width=True,
+                    key=f"dl_zip_{proc['code']}",
+                )
 
     # ── ΟΔΗΓΙΕΣ ΑΠΟΣΤΟΛΗΣ ─────────────────────────────────────
     with st.expander("📬 Οδηγίες Αποστολής στη Μεγ. Γεν. Γραμματεία"):
