@@ -678,6 +678,39 @@ def fill_docx_smart(
     doc = Document(template_path)
     fname = os.path.basename(form_file_key).upper()
 
+    # ════════════════════════════════════════════════════════
+    # DEBUG PANEL
+    # ════════════════════════════════════════════════════════
+    with st.expander(f"🔍 DEBUG: {os.path.basename(form_file_key)}", expanded=True):
+        st.markdown(f"**form_file_key:** `{form_file_key}`")
+        st.markdown(f"**fname (uppercase):** `{fname}`")
+
+        st.markdown("**Έλεγχος συνθήκης εντύπου:**")
+        st.write({
+            "4_ΚΑΤΑΣΤΑΣΗ match": "4_-_ΚΑΤΑΣΤΑΣΗ" in fname or "ΚΑΤΑΣΤΑΣΗ_ΕΚΛ" in fname,
+            "3_ΑΝΑΛΥΤΙΚΟΣ match": "3_-_ΑΝΑΛΥΤΙΚ" in fname or "ΑΝΑΛΥΤΙΚΟΣ_ΠΙΝ" in fname,
+            "2Α_ΑΠΟΣΠΑΣΜΑ match": "2" in fname and "ΑΠΟΣΠ" in fname,
+            "1_ΑΝΑΓΓΕΛΙΑ match": "1_-_ΑΝΑΓΓΕΛΙΑ_ΕΚΛΟΓ" in fname or "ΑΝΑΓΓΕΛΙΑ_ΕΚΛΟΓ" in fname,
+            "5_ΟΝΟΜΑΣΤΙΚΗ match": "5_-_ΟΝΟΜΑΣΤ" in fname or "ΟΝΟΜΑΣΤΙΚΗ_ΚΑΤΑΣ" in fname,
+        })
+
+        st.markdown(f"**members_by_field keys:** `{list(members_by_field.keys())}`")
+        st.markdown(f"**Συνολικά members:** {sum(1 for v in members_by_field.values() if v is not None)}")
+
+        filled_members = {k: f"{v.get('επώνυμο','')} {v.get('όνομα','')}" 
+                         for k, v in members_by_field.items() if v}
+        if filled_members:
+            st.markdown("**Μέλη που επιλέχθηκαν:**")
+            for k, v in filled_members.items():
+                st.write(f"  - `{k}` → {v}")
+        else:
+            st.error("⚠️ ΔΕΝ ΕΠΙΛΕΧΘΗΚΑΝ ΜΕΛΗ! Πήγαινε στη καρτέλα 'Συμπλήρωση' και επίλεξε αξιωματικούς.")
+
+        st.markdown(f"**collected keys:** `{list(collected.keys())}`")
+        st.markdown(f"**ekl_diettia:** `{collected.get('ekl_diettia', 'ΔΕΝ ΒΡΕΘΗΚΕ')}`")
+        st.markdown(f"**ekl_imerominia:** `{collected.get('ekl_imerominia', 'ΔΕΝ ΒΡΕΘΗΚΕ')}`")
+    # ════════════════════════════════════════════════════════
+
     # ── Βοηθητική: παίρνει μέλος από πεδίο ──────────────────
     def get_member(field_key: str) -> Optional[Dict]:
         return members_by_field.get(field_key)
@@ -716,6 +749,7 @@ def fill_docx_smart(
     if "4_-_ΚΑΤΑΣΤΑΣΗ" in fname or "ΚΑΤΑΣΤΑΣΗ_ΕΚΛ" in fname:
         table = doc.tables[0]
         in_prostheti = False
+        filled_count = 0
 
         # Header cells
         for r_i, row in enumerate(table.rows):
@@ -724,38 +758,42 @@ def fill_docx_smart(
                 continue
             for c_i, cell in enumerate(cells):
                 ct = cell.text.strip()
-                # Τεκτ. Διετία
                 if "Τεκτ" in ct and "Διετία" in ct and c_i + 1 < len(cells):
                     _write_cell(cells[c_i + 1], diettia_parts)
-                # Σ. Στ.
                 elif ct in ("Σ Στοά:", "Σ∴ Στ∴:", "Σ. Στ.:") and c_i + 1 < len(cells):
                     _write_cell(cells[c_i + 1], f"{stoaa_data['name']}")
-                # Εν Αν
                 elif ct in ("Εν Αν:", "Εν Αν∴:") and c_i + 1 < len(cells):
                     _write_cell(cells[c_i + 1], stoaa_data['anatoli'])
 
         # Official rows
+        debug_rows = []
         for r_i, row in enumerate(table.rows):
             cells = _unique_cells(row)
             if len(cells) < 5:
                 continue
             axioma = cells[3].text.strip() if len(cells) > 3 else ""
 
-            # Detect ΠΡΟΣΘΕΤΟΙ section
             if "ΠΡΟΣΘΕΤΟΙ" in axioma:
                 in_prostheti = True
                 continue
-            if "ΕΞΕΛΕΓΚΤ" in axioma or axioma in ("Ι", "ΙΙ", "ΙΙΙ"):
+            if axioma in ("Ι", "ΙΙ", "ΙΙΙ"):
                 in_prostheti = False
                 continue
 
-            # Build lookup key
             lookup = axioma + ("_Π" if in_prostheti else "")
             field_key = AXIOMA_TO_KEY.get(lookup) or AXIOMA_TO_KEY.get(axioma)
             if not field_key or not axioma or axioma.startswith("Α/Α"):
                 continue
 
             m = get_member(field_key)
+            debug_rows.append({
+                "row": r_i,
+                "axioma": axioma,
+                "field_key": field_key,
+                "member_found": m is not None,
+                "name": f"{m.get('επώνυμο','')} {m.get('όνομα','')}" if m else "—"
+            })
+
             if not m:
                 continue
 
@@ -775,6 +813,14 @@ def fill_docx_smart(
                 _write_cell(cells[9], m.get('τηλέφωνο', '') or m.get('τηλεφωνο', ''))
             if len(cells) > 10:
                 _write_cell(cells[10], m.get('email', ''))
+            filled_count += 1
+
+        with st.expander("🔍 DEBUG Form 4 — Γραμμές πίνακα", expanded=True):
+            st.markdown(f"**Συνολικά γραμμές αξιωματικών που βρέθηκαν:** {len(debug_rows)}")
+            st.markdown(f"**Γραμμές που συμπληρώθηκαν:** {filled_count}")
+            for dr in debug_rows:
+                icon = "✅" if dr["member_found"] else "❌"
+                st.write(f"{icon} R{dr['row']} `{dr['axioma']}` → key:`{dr['field_key']}` → {dr['name']}")
 
     # ══════════════════════════════════════════════════════════
     # FORM 3: ΑΝΑΛΥΤΙΚΟΣ ΠΙΝΑΚΑΣ ΕΚΛΕΓΕΝΤΩΝ
