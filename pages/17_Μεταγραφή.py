@@ -101,52 +101,33 @@ TRANSCRIPTION_PROMPT = """
 # DEJAVU FONTS — AUTO DOWNLOAD
 # ══════════════════════════════════════════════════════════════
 
-# Τα DejaVu fonts είναι open-source και ελεύθερα διαθέσιμα.
-# Αν δεν βρεθούν τοπικά (π.χ. στο Streamlit Cloud), κατεβαίνουν
-# αυτόματα από το GitHub repo των DejaVu fonts.
 _FONT_URLS = {
-    "DejaVuSans.ttf":       "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf",
-    "DejaVuSans-Bold.ttf":  "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans-Bold.ttf",
-    "DejaVuSerif.ttf":      "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSerif.ttf",
-    "DejaVuSerif-Bold.ttf": "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSerif-Bold.ttf",
+    "DejaVuSans.ttf":         "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf",
+    "DejaVuSans-Bold.ttf":    "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans-Bold.ttf",
+    "DejaVuSerif.ttf":        "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSerif.ttf",
+    "DejaVuSerif-Bold.ttf":   "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSerif-Bold.ttf",
     "DejaVuSerif-Italic.ttf": "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSerif-Italic.ttf",
 }
 
-# Αποθήκευση σε /tmp για persistence εντός session στο Streamlit Cloud
 _FONT_CACHE_DIR = "/tmp/grammateas_fonts"
 
 
 def ensure_fonts() -> str:
-    """
-    Επιστρέφει τον φάκελο με τα DejaVu fonts.
-    Ελέγχει πολλαπλά πιθανά paths πριν καταφύγει στο auto-download.
-    """
     sentinel = "DejaVuSans.ttf"
-
-    # Όλα τα πιθανά paths όπου μπορεί να βρίσκεται το fonts/ φάκελος
     candidates = []
-
-    # Από τη θέση του τρέχοντος αρχείου (pages/17_xxx.py → project_root/fonts/)
     try:
         this_file = os.path.abspath(__file__)
         candidates.append(os.path.join(os.path.dirname(os.path.dirname(this_file)), "fonts"))
         candidates.append(os.path.join(os.path.dirname(this_file), "fonts"))
     except Exception:
         pass
-
-    # Από το τρέχον working directory
     candidates.append(os.path.join(os.getcwd(), "fonts"))
     candidates.append(os.path.join(os.getcwd(), "..", "fonts"))
-
-    # Streamlit Cloud mount path
     candidates.append("/mount/src/grammateas/fonts")
-
     for candidate in candidates:
         candidate = os.path.normpath(candidate)
         if os.path.isdir(candidate) and os.path.exists(os.path.join(candidate, sentinel)):
             return candidate
-
-    # Fallback: auto-download στο /tmp
     os.makedirs(_FONT_CACHE_DIR, exist_ok=True)
     for filename, url in _FONT_URLS.items():
         dest = os.path.join(_FONT_CACHE_DIR, filename)
@@ -159,17 +140,10 @@ def ensure_fonts() -> str:
 
 
 def register_dejavu_fonts() -> Tuple[str, str, str, str]:
-    """
-    Καταχωρεί τα DejaVu fonts στο reportlab και επιστρέφει
-    τα ονόματα (sans, sans-bold, serif, serif-bold).
-    Αν αποτύχει, επιστρέφει τα built-in Helvetica (χωρίς ελληνικά,
-    αλλά τουλάχιστον δεν κρασάρει).
-    """
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
 
     font_dir = ensure_fonts()
-
     font_map = {
         "DJVS":  "DejaVuSans.ttf",
         "DJVSB": "DejaVuSans-Bold.ttf",
@@ -177,7 +151,6 @@ def register_dejavu_fonts() -> Tuple[str, str, str, str]:
         "DJVRB": "DejaVuSerif-Bold.ttf",
         "DJVRI": "DejaVuSerif-Italic.ttf",
     }
-
     registered = set(pdfmetrics.getRegisteredFontNames())
     for alias, filename in font_map.items():
         if alias not in registered:
@@ -187,14 +160,11 @@ def register_dejavu_fonts() -> Tuple[str, str, str, str]:
                     pdfmetrics.registerFont(TTFont(alias, path))
                 except Exception:
                     pass
-
     registered = set(pdfmetrics.getRegisteredFontNames())
-
     fs  = "DJVS"  if "DJVS"  in registered else "Helvetica"
     fsb = "DJVSB" if "DJVSB" in registered else "Helvetica-Bold"
     fr  = "DJVR"  if "DJVR"  in registered else "Helvetica"
     frb = "DJVRB" if "DJVRB" in registered else "Helvetica-Bold"
-
     return fs, fsb, fr, frb
 
 # ══════════════════════════════════════════════════════════════
@@ -278,10 +248,6 @@ def split_audio_to_chunks(audio_bytes: bytes) -> Tuple[List[bytes], Optional[str
 # WORD DOCUMENT HELPER
 # ══════════════════════════════════════════════════════════════
 def extract_text_from_docx(docx_bytes: bytes) -> Tuple[str, Optional[str]]:
-    """
-    Εξάγει το πλήρες κείμενο από .docx αρχείο με python-docx.
-    Διατηρεί παραγράφους, πίνακες και επικεφαλίδες με τη σωστή σειρά.
-    """
     try:
         from docx import Document as DocxDocument
         from docx.oxml.ns import qn
@@ -291,7 +257,6 @@ def extract_text_from_docx(docx_bytes: bytes) -> Tuple[str, Optional[str]]:
 
         def process_element(elem):
             tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
-
             if tag == "p":
                 style_name = ""
                 pPr = elem.find(qn("w:pPr"))
@@ -299,19 +264,16 @@ def extract_text_from_docx(docx_bytes: bytes) -> Tuple[str, Optional[str]]:
                     pStyle = pPr.find(qn("w:pStyle"))
                     if pStyle is not None:
                         style_name = pStyle.get(qn("w:val"), "")
-
                 text_parts = []
                 for child in elem.iter(qn("w:t")):
                     if child.text:
                         text_parts.append(child.text)
                 text = "".join(text_parts).strip()
-
                 if text:
                     if "Heading" in style_name or "heading" in style_name:
                         lines.append(f"\n### {text}")
                     else:
                         lines.append(text)
-
             elif tag == "tbl":
                 for row in elem.findall(f".//{qn('w:tr')}"):
                     cell_texts = []
@@ -564,6 +526,8 @@ def format_into_praktiko(
 }
 """.strip()
 
+    # Αποθηκεύουμε το raw εκτός try ώστε να είναι διαθέσιμο στο except
+    raw = ""
     try:
         msg = client.messages.create(
             model=CLAUDE_MODEL,
@@ -578,18 +542,22 @@ def format_into_praktiko(
             }],
         )
         raw = msg.content[0].text if msg.content else ""
-        clean = re.sub(r"^```(?:json)?\s*", "", raw.strip())
-        clean = re.sub(r"\s*```$", "", clean)
-        result = json.loads(clean)
+
+        # ── ΔΙΟΡΘΩΣΗ: χρησιμοποιούμε την _extract_json αντί του αδύναμου regex ──
+        result = _extract_json(raw)
+        if result is None:
+            raise json.JSONDecodeError("No valid JSON found in Claude response", raw, 0)
+
         result["μεταγραφή_λέξη_προς_λέξη"] = transcript
         return result, None
 
     except json.JSONDecodeError:
+        # Fallback: επιστρέφουμε skeleton με το raw κείμενο για χειροκίνητο έλεγχο
         return {
             "ημερομηνία": "", "ημέρα": "", "βαθμός_γενική": "Μαθητού",
             "τόπος": "", "σεβάσμιος": "", "παρόντες_αριθμός": 0,
             "παρόντες_ολογράφως": "", "ημερησία_διάταξη": [],
-            "κείμενο_πρακτικών": raw if "raw" in locals() else "",
+            "κείμενο_πρακτικών": raw,
             "αποφάσεις": [], "κορμός_αγαθοεργίας": 0.0,
             "κορμός_ολογράφως": "", "γραμματεύς": "", "ρήτωρ": "",
             "μεταγραφή_λέξη_προς_λέξη": transcript,
@@ -651,7 +619,6 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
     from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY, TA_RIGHT
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table
 
-    # ── Φόρτωση / auto-download DejaVu fonts ──────────────────
     fs, fsb, fr, frb = register_dejavu_fonts()
 
     cnvy  = colors.HexColor(NAVY)
