@@ -2,21 +2,6 @@
 """
 Σελίδα 17 — Μεταγραφή Ηχογράφησης → Πρακτικά ΜΣΤΕ
          & Έγγραφο Word → Πρακτικά ΜΣΤΕ
-
-Ροή Ηχογράφησης:
-1. Upload αρχείου ήχου: wav/mp3/m4a/ogg/webm/aac
-2. Μετατροπή/κανονικοποίηση σε MP3 mono 16kHz με pydub/ffmpeg
-3. Αυτόματο split σε ασφαλή chunks με μικρό overlap
-4. OpenAI transcription στα Ελληνικά με domain prompt
-5. Καθαρισμός hallucinations / υποτίτλων / άχρηστων επαναλήψεων
-6. Claude → σύνταξη επίσημων Πρακτικών σε JSON
-7. Editor → PDF
-
-Ροή Word:
-1. Upload αρχείου .docx
-2. Εξαγωγή κειμένου με python-docx
-3. Claude → σύνταξη επίσημων Πρακτικών σε JSON
-4. Editor → PDF
 """
 
 import sys
@@ -98,9 +83,124 @@ TRANSCRIPTION_PROMPT = """
 """.strip()
 
 # ══════════════════════════════════════════════════════════════
+# ΠΡΩΤΟΚΟΛΛΟ ΤΑΞΗΣ ΠΡΟΣΦΩΝΗΣΕΩΝ
+# Εγκύκλιος υπ' αριθ. 27/(Κ) της 19.04.2019 — Πίνακας Α
+# Συνήθεις Συνεδρίες
+# Χαμηλότερος order = υψηλότερο αξίωμα (εισέρχεται τελευταίος,
+# χαιρετίζεται πρώτος)
+# ══════════════════════════════════════════════════════════════
+TAXH_PROSFWNHSEWN: List[Dict[str, Any]] = [
+    {
+        "order": 1,
+        "title": "Μέγας Διδάσκαλος της Μ∴Σ∴Τ∴Ε∴",
+        "prosfwnisi": "Ενδοξότατε Μέγ∴ Διδ∴",
+        "keywords": [r"μεγ.{0,4}διδάσκαλ", r"μέγα.{0,4}διδ", r"grand.?master",
+                     r"μεγ.{0,4}διδ.{0,10}μστε"],
+    },
+    {
+        "order": 2,
+        "title": "Επίτιμοι Μεγ∴ Διδάσκαλοι της Μ∴Σ∴Τ∴Ε∴",
+        "prosfwnisi": "Ενδοξότατε Επίτ∴ Μέγ∴ Διδ∴",
+        "keywords": [r"επίτιμ.{0,6}μεγ.{0,4}διδ", r"επιτ.{0,4}μεγ.{0,4}διδ"],
+    },
+    {
+        "order": 3,
+        "title": "Πρώην Μεγ∴ Διδάσκαλοι της Μ∴Σ∴Τ∴Ε∴",
+        "prosfwnisi": "Ενδοξότατε πρ∴ Μέγ∴ Διδ∴",
+        "keywords": [r"πρώην.{0,6}μεγ.{0,4}διδ", r"πρ.{0,4}μεγ.{0,4}διδ"],
+    },
+    {
+        "order": 4,
+        "title": "Πρόσθετος Μέγας Διδάσκαλος της Μ∴Σ∴Τ∴Ε∴",
+        "prosfwnisi": "Ενδοξότατε Πρόσθ∴ Μέγ∴ Διδ∴",
+        "keywords": [r"πρόσθετ.{0,4}μεγ", r"πρόσθ.{0,4}μεγ.{0,4}διδ"],
+    },
+    {
+        "order": 5,
+        "title": "Ένδοξοι Μεγ∴ Αξιωματικοί Συμβουλίου Μ∴Σ∴Τ∴Ε∴",
+        "prosfwnisi": "Ένδοξε Μέγ∴ Αξ∴",
+        "keywords": [r"μεγ.{0,4}αξιωμ.{0,6}συμβ", r"ένδοξ.{0,4}μεγ.{0,4}αξ",
+                     r"μεγ.{0,4}αξ.{0,6}μστε"],
+    },
+    {
+        "order": 6,
+        "title": "Πρώην Μεγ∴ Αξιωματικοί Συμβουλίου Μ∴Σ∴Τ∴Ε∴",
+        "prosfwnisi": "Ένδ∴ Αδ∴ πρ∴ Μέγ∴ Αξ∴",
+        "keywords": [r"πρώην.{0,4}μεγ.{0,4}αξιωμ", r"πρ.{0,4}μεγ.{0,4}αξ"],
+    },
+    {
+        "order": 7,
+        "title": "Επίτιμα Μέλη Μ∴Σ∴Τ∴Ε∴",
+        "prosfwnisi": "Επίτιμε",
+        "keywords": [r"επίτιμ.{0,4}μέλ.{0,10}μστε", r"επίτιμ.{0,4}μέλ.{0,10}μεγάλ"],
+    },
+    {
+        "order": 8,
+        "title": "Ενεργοί Κοσμήτορες Μ∴Σ∴Τ∴Ε∴",
+        "prosfwnisi": "Αιδεσιμ∴ Κοσμ∴",
+        "keywords": [r"ενεργ.{0,4}κοσμήτορ", r"κοσμήτορ.{0,10}μστε",
+                     r"κοσμήτορ.{0,10}μεγάλ"],
+    },
+    {
+        "order": 9,
+        "title": "Ομότιμοι Κοσμήτορες Μ∴Σ∴Τ∴Ε∴",
+        "prosfwnisi": "Αιδεσιμ∴ ομότ∴ Κοσμ∴",
+        "keywords": [r"ομότιμ.{0,4}κοσμ"],
+    },
+    {
+        "order": 10,
+        "title": "Μέγας Επιθεωρητής Στοάς",
+        "prosfwnisi": "Σεβ∴ Μέγ∴ Επιθ∴",
+        "keywords": [r"μεγ.{0,4}επιθεωρητ", r"μέγ.{0,4}επιθ"],
+    },
+    {
+        "order": 11,
+        "title": "Σεβάσμιος (εν ενεργεία)",
+        "prosfwnisi": "Σεβ∴ Διδ∴",
+        "keywords": [r"σεβάσμι", r"σεβ.{0,4}διδ", r"worshipful"],
+    },
+    {
+        "order": 12,
+        "title": "Πρώην Σεβάσμιοι Στοάς",
+        "prosfwnisi": "Αιδεσιμ∴ πρ∴ Σεβ∴",
+        "keywords": [r"πρώην.{0,4}σεβ", r"πρ.{0,4}σεβ.{0,10}στοά"],
+    },
+    {
+        "order": 13,
+        "title": "Αξιωματικοί Στοάς",
+        "prosfwnisi": "Αδ∴ [αξίωμα]",
+        "keywords": [r"επόπτ", r"γραμματεύ", r"ταμία", r"τελετάρχ", r"ρήτορ",
+                     r"θησαυροφύλ", r"ελεγκτ", r"αξιωματ.{0,6}στοά"],
+    },
+    {
+        "order": 14,
+        "title": "Διδάσκαλοι Στοάς",
+        "prosfwnisi": "Αδ∴",
+        "keywords": [r"διδάσκαλ.{0,6}στοά", r"βαθμ.{0,4}διδ"],
+    },
+    {
+        "order": 15,
+        "title": "Εταίροι Στοάς",
+        "prosfwnisi": "Αδ∴",
+        "keywords": [r"εταίρ.{0,6}στοά", r"βαθμ.{0,4}εταίρ"],
+    },
+    {
+        "order": 16,
+        "title": "Μαθηταί Στοάς",
+        "prosfwnisi": "Αδ∴",
+        "keywords": [r"μαθητ.{0,6}στοά", r"βαθμ.{0,4}μαθ"],
+    },
+]
+
+# Συμπαγής μορφή για τον Claude
+PROTOCOL_TEXT = "\n".join(
+    f"{e['order']}. {e['title']} → «{e['prosfwnisi']}»"
+    for e in TAXH_PROSFWNHSEWN
+)
+
+# ══════════════════════════════════════════════════════════════
 # DEJAVU FONTS — AUTO DOWNLOAD
 # ══════════════════════════════════════════════════════════════
-
 _FONT_URLS = {
     "DejaVuSans.ttf":         "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf",
     "DejaVuSans-Bold.ttf":    "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans-Bold.ttf",
@@ -108,7 +208,6 @@ _FONT_URLS = {
     "DejaVuSerif-Bold.ttf":   "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSerif-Bold.ttf",
     "DejaVuSerif-Italic.ttf": "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSerif-Italic.ttf",
 }
-
 _FONT_CACHE_DIR = "/tmp/grammateas_fonts"
 
 
@@ -142,7 +241,6 @@ def ensure_fonts() -> str:
 def register_dejavu_fonts() -> Tuple[str, str, str, str]:
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
-
     font_dir = ensure_fonts()
     font_map = {
         "DJVS":  "DejaVuSans.ttf",
@@ -200,25 +298,16 @@ def normalize_to_mp3(audio_bytes: bytes, ext: str) -> Tuple[Optional[bytes], Opt
     try:
         from pydub import AudioSegment
         audio = AudioSegment.from_file(io.BytesIO(audio_bytes), format=ext)
-        audio = audio.set_channels(1)
-        audio = audio.set_frame_rate(AUDIO_RATE)
+        audio = audio.set_channels(1).set_frame_rate(AUDIO_RATE)
         out_buf = io.BytesIO()
         audio.export(out_buf, format="mp3", bitrate=AUDIO_BITRATE,
                      parameters=["-ac", "1", "-ar", str(AUDIO_RATE)])
         out_buf.seek(0)
         return out_buf.read(), None
     except ImportError as e:
-        return None, (
-            "❌ Δεν φορτώθηκε το package `pydub`. "
-            "Ελέγξτε ότι στο requirements.txt υπάρχει `pydub>=0.25.1`. "
-            f"Λεπτομέρεια: {e}"
-        )
+        return None, f"❌ Δεν φορτώθηκε το `pydub`. Λεπτομέρεια: {e}"
     except Exception as e:
-        return None, (
-            "❌ Σφάλμα στη μετατροπή ήχου. "
-            "Αν το αρχείο είναι από iPhone/M4A/AAC, ελέγξτε ότι στο packages.txt υπάρχει `ffmpeg`. "
-            f"Λεπτομέρεια: {e}"
-        )
+        return None, f"❌ Σφάλμα μετατροπής ήχου (ελέγξτε ffmpeg). Λεπτομέρεια: {e}"
 
 
 def split_audio_to_chunks(audio_bytes: bytes) -> Tuple[List[bytes], Optional[str]]:
@@ -251,7 +340,6 @@ def extract_text_from_docx(docx_bytes: bytes) -> Tuple[str, Optional[str]]:
     try:
         from docx import Document as DocxDocument
         from docx.oxml.ns import qn
-
         doc = DocxDocument(io.BytesIO(docx_bytes))
         lines: List[str] = []
 
@@ -264,10 +352,7 @@ def extract_text_from_docx(docx_bytes: bytes) -> Tuple[str, Optional[str]]:
                     pStyle = pPr.find(qn("w:pStyle"))
                     if pStyle is not None:
                         style_name = pStyle.get(qn("w:val"), "")
-                text_parts = []
-                for child in elem.iter(qn("w:t")):
-                    if child.text:
-                        text_parts.append(child.text)
+                text_parts = [c.text for c in elem.iter(qn("w:t")) if c.text]
                 text = "".join(text_parts).strip()
                 if text:
                     if "Heading" in style_name or "heading" in style_name:
@@ -278,29 +363,22 @@ def extract_text_from_docx(docx_bytes: bytes) -> Tuple[str, Optional[str]]:
                 for row in elem.findall(f".//{qn('w:tr')}"):
                     cell_texts = []
                     for cell in row.findall(f".//{qn('w:tc')}"):
-                        parts = []
-                        for t in cell.iter(qn("w:t")):
-                            if t.text:
-                                parts.append(t.text)
-                        cell_texts.append("".join(parts).strip())
+                        cell_texts.append("".join(
+                            t.text for t in cell.iter(qn("w:t")) if t.text
+                        ).strip())
                     row_line = " | ".join(c for c in cell_texts if c)
                     if row_line:
                         lines.append(row_line)
 
-        body = doc.element.body
-        for child in body:
+        for child in doc.element.body:
             process_element(child)
 
         full_text = "\n".join(lines).strip()
         if not full_text:
             return "", "⚠️ Το αρχείο Word δεν περιέχει αναγνώσιμο κείμενο."
         return full_text, None
-
     except ImportError:
-        return "", (
-            "❌ Δεν βρέθηκε το package `python-docx`. "
-            "Προσθέστε `python-docx>=1.0.0` στο requirements.txt."
-        )
+        return "", "❌ Δεν βρέθηκε το `python-docx`. Προσθέστε `python-docx>=1.0.0`."
     except Exception as e:
         return "", f"❌ Σφάλμα ανάγνωσης αρχείου Word: {e}"
 
@@ -310,14 +388,13 @@ def extract_text_from_docx(docx_bytes: bytes) -> Tuple[str, Optional[str]]:
 def clean_transcript(text: str) -> str:
     if not text:
         return ""
-    junk_patterns = [
+    for pat in [
         r"Υπότιτλοι\s+AUTHORWAVE", r"Υποτιτλοι\s+AUTHORWAVE", r"AUTHORWAVE",
         r"Ευχαριστούμε πολύ που παρακολουθήσατε το βίντεο!?",
         r"Παρακολουθείτε και εγγραφείτε στο κανάλι μας.*?(?=\n|$)",
         r"www\.argirobarbarigou\.com",
         r"\bUSING\b", r"\bresolving\b", r"\bprogresses\b", r"\battendant\b",
-    ]
-    for pat in junk_patterns:
+    ]:
         text = re.sub(pat, " ", text, flags=re.IGNORECASE | re.MULTILINE)
     text = re.sub(r"(.{8,80}?)(\s+\1){2,}", r"\1", text, flags=re.IGNORECASE)
     text = re.sub(r"[ \t]{2,}", " ", text)
@@ -328,7 +405,7 @@ def clean_transcript(text: str) -> str:
 
 def remove_overlap_repetition(full_text: str) -> str:
     lines = [l.strip() for l in full_text.splitlines() if l.strip()]
-    cleaned = []
+    cleaned: List[str] = []
     for line in lines:
         if cleaned and line == cleaned[-1]:
             continue
@@ -341,15 +418,14 @@ def remove_overlap_repetition(full_text: str) -> str:
 def transcribe_chunk(chunk: bytes, chunk_idx: int, total: int) -> str:
     openai_key = get_openai_key()
     if not openai_key:
-        return f"[❌ Chunk {chunk_idx + 1}: Δεν βρέθηκε OPENAI_API_KEY στα Streamlit Secrets]"
-    chunk_mb = mb_size(chunk)
-    if chunk_mb > MAX_OPENAI_CHUNK_MB:
-        return f"[❌ Chunk {chunk_idx + 1}: {chunk_mb:.1f}MB > {MAX_OPENAI_CHUNK_MB}MB]"
+        return f"[❌ Chunk {chunk_idx+1}: Δεν βρέθηκε OPENAI_API_KEY]"
+    if mb_size(chunk) > MAX_OPENAI_CHUNK_MB:
+        return f"[❌ Chunk {chunk_idx+1}: {mb_size(chunk):.1f}MB > {MAX_OPENAI_CHUNK_MB}MB]"
     try:
         from openai import OpenAI
         client = OpenAI(api_key=openai_key)
         audio_file = io.BytesIO(chunk)
-        audio_file.name = f"chunk_{chunk_idx + 1}.mp3"
+        audio_file.name = f"chunk_{chunk_idx+1}.mp3"
         try:
             result = client.audio.transcriptions.create(
                 model=TRANSCRIPTION_MODEL_PRIMARY, file=audio_file,
@@ -365,13 +441,13 @@ def transcribe_chunk(chunk: bytes, chunk_idx: int, total: int) -> str:
                     response_format="text", temperature=0,
                 )
             except Exception as fallback_error:
-                return (f"[❌ Chunk {chunk_idx + 1}: Primary: {primary_error}. "
+                return (f"[❌ Chunk {chunk_idx+1}: Primary: {primary_error}. "
                         f"Fallback: {fallback_error}]")
         return clean_transcript(str(result))
     except ImportError:
-        return f"[❌ Chunk {chunk_idx + 1}: Προσθέστε `openai` στο requirements.txt]"
+        return f"[❌ Chunk {chunk_idx+1}: Προσθέστε `openai` στο requirements.txt]"
     except Exception as e:
-        return f"[❌ Chunk {chunk_idx + 1}: {e}]"
+        return f"[❌ Chunk {chunk_idx+1}: {e}]"
 
 
 def transcribe_audio(
@@ -387,7 +463,8 @@ def transcribe_audio(
         progress_cb(12, f"✂️ Διαχωρισμός… MP3: {mb_size(mp3_bytes):.1f}MB")
     chunks, split_warning = split_audio_to_chunks(mp3_bytes)
     n = len(chunks)
-    transcripts, errors = [], []
+    transcripts: List[str] = []
+    errors: List[str] = []
     for i, chunk in enumerate(chunks):
         if progress_cb:
             progress_cb(15 + int(65 * (i / max(n, 1))),
@@ -398,29 +475,20 @@ def transcribe_audio(
                 errors.append(text)
             transcripts.append(f"=== Τμήμα {i+1}/{n} ===\n{text}")
     full = remove_overlap_repetition(clean_transcript("\n\n".join(transcripts)))
-    warnings = []
+    warnings: List[str] = []
     if split_warning:
         warnings.append(split_warning)
     if errors:
         warnings.append("⚠️ Κάποια chunks δεν μεταγράφηκαν σωστά.")
     return full, "\n".join(warnings) if warnings else None
 
-
 # ══════════════════════════════════════════════════════════════
 # JSON EXTRACTION HELPER
 # ══════════════════════════════════════════════════════════════
 def _extract_json(raw: str) -> Optional[dict]:
-    """
-    Προσπαθεί να εξαγάγει έγκυρο JSON object από raw κείμενο του Claude.
-    Στρατηγική:
-      1. Αφαίρεση markdown fences → απευθείας parse
-      2. Εύρεση πρώτου { ... } με μέτρηση βάθους → parse
-    Επιστρέφει dict ή None αν αποτύχουν όλα.
-    """
     if not raw:
         return None
-
-    # Βήμα 1: αφαίρεση ```json ... ``` και απευθείας parse
+    # Βήμα 1: αφαίρεση markdown fences
     clean = raw.strip()
     clean = re.sub(r"^```(?:json)?\s*", "", clean, flags=re.MULTILINE)
     clean = re.sub(r"\s*```\s*$", "", clean, flags=re.MULTILINE).strip()
@@ -428,16 +496,11 @@ def _extract_json(raw: str) -> Optional[dict]:
         return json.loads(clean)
     except (json.JSONDecodeError, ValueError):
         pass
-
-    # Βήμα 2: βρίσκουμε το πρώτο { και μετράμε ως το αντίστοιχο }
+    # Βήμα 2: depth-counting για πρώτο { ... }
     start = raw.find("{")
     if start == -1:
         return None
-
-    depth = 0
-    in_str = False
-    esc = False
-    end = -1
+    depth, in_str, esc, end = 0, False, False, -1
     for idx in range(start, len(raw)):
         ch = raw[idx]
         if esc:
@@ -456,14 +519,36 @@ def _extract_json(raw: str) -> Optional[dict]:
                 if depth == 0:
                     end = idx
                     break
-
     if end == -1:
         return None
-
     try:
         return json.loads(raw[start:end + 1])
     except (json.JSONDecodeError, ValueError):
         return None
+
+# ══════════════════════════════════════════════════════════════
+# ΤΑΞΙΝΟΜΗΣΗ ΑΞΙΩΜΑΤΙΚΩΝ ΚΑΤΑ ΠΡΩΤΟΚΟΛΛΟ
+# ══════════════════════════════════════════════════════════════
+def _protocol_rank(title_or_name: str) -> int:
+    """
+    Επιστρέφει την τιμή πρωτοκόλλου.
+    Χαμηλότερος αριθμός = υψηλότερο αξίωμα.
+    Αν δεν αναγνωριστεί, επιστρέφει 99.
+    """
+    text = title_or_name.lower()
+    for entry in TAXH_PROSFWNHSEWN:
+        for kw in entry["keywords"]:
+            if re.search(kw, text, flags=re.IGNORECASE):
+                return entry["order"]
+    return 99
+
+
+def sort_officials_by_protocol(officials: List[str]) -> List[str]:
+    """
+    Ταξινομεί λίστα αξιωματικών κατά πρωτόκολλο Εγκ. 27/2019.
+    Ο υψηλότερος στη λίστα (χαμηλότερο order) χαιρετίζεται πρώτος.
+    """
+    return sorted(officials, key=_protocol_rank)
 
 # ══════════════════════════════════════════════════════════════
 # CLAUDE → ΠΡΑΚΤΙΚΑ
@@ -482,33 +567,44 @@ def format_into_praktiko(
     except ImportError:
         return None, "❌ Προσθέστε `anthropic` στο requirements.txt."
 
-    system = """
+    system = f"""
 Είσαι Γραμματεύς-Σφραγιδοφύλαξ της Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ υπ' αρ. 84.
 Σου δίνεται κείμενο ελληνικής τεκτονικής συνεδρίασης (από ηχογράφηση ή από έγγραφο Word).
 Στόχος σου είναι να συντάξεις επίσημα Πρακτικά ΜΣΤΕ.
 
-Πολύ σημαντικό:
-- Μην εφευρίσκεις ονόματα, ποσά, αποφάσεις ή αριθμούς παρόντων αν δεν υπάρχουν καθαρά.
-- Αν κάτι δεν προκύπτει, άφησέ το κενό ή γράψε "Δεν προέκυψε σαφώς".
-- Κράτα επίσημο, αρχαιοπρεπές, γραμματειακό ύφος.
-- Για κείμενα από Word: κάνε περίληψη ομιλιών διατηρώντας το νόημα και τη δομή.
-- Διόρθωσε εμφανή λάθη μόνο όταν το νόημα είναι σαφές.
+════════════════════════════════════════════════
+ΠΡΩΤΟΚΟΛΛΟ ΤΑΞΗΣ ΠΡΟΣΦΩΝΗΣΕΩΝ & ΧΑΙΡΕΤΙΣΜΩΝ
+Εγκύκλιος Μ∴Σ∴Τ∴Ε∴ υπ' αριθ. 27/(Κ) της 19.04.2019 — Πίνακας Α (Συνήθεις Συνεδρίες)
+Σειρά από υψηλότερο → χαμηλότερο αξίωμα:
 
-Υποχρεωτική δομή κειμένου:
-• Έναρξη
-• Παρόντες
-• Θέσεις αξιωματικών, εφόσον προκύπτουν
-• Αλληλογραφία, εφόσον προκύπτει
-• Επικύρωση προηγουμένων πρακτικών, εφόσον προκύπτει
-• Εργασίες / Ομιλίες / Αποφάσεις
-• Κεφάλαιον Αγαθοεργίας, εφόσον προκύπτει
-• Κλείσιμο
+{PROTOCOL_TEXT}
+════════════════════════════════════════════════
 
-Χρησιμοποίησε όπου ταιριάζει:
-Σεβ∴ Διδ∴, Αδ∴, Αδδ∴, Σ∴ Στ∴, Βαθμ∴ Μαθ∴/Ετ∴/Διδ∴, Γραμμ∴, Ρήτ∴.
+ΚΑΝΟΝΕΣ ΕΦΑΡΜΟΓΗΣ ΤΟΥ ΠΡΩΤΟΚΟΛΛΟΥ:
+• Πεδίο "χαιρετισμοί_κατά_σειράν":
+  - Κατέγραψε ΟΛΟΥΣ τους αξιωματικούς/επισκέπτες που χαιρέτισε ο Σεβ∴ κατά την έναρξη.
+  - Ταξινόμησέ τους ΑΥΣΤΗΡΑ κατά το πρωτόκολλο ανωτέρω (1→16).
+  - Μορφή: "«Προσφώνηση» Ονοματεπώνυμο — Αξίωμα"
+  - Παράδειγμα: "Ενδοξότατε Μέγ∴ Διδ∴ Γεώργιος Παπαδόπουλος — Μέγας Διδάσκαλος"
+• Πεδίο "ομιλητές_κατά_σειράν":
+  - Κατέγραψε ΟΛΟΥΣ όσους έλαβαν τον λόγο, ΜΕ ΤΗ ΣΕΙΡΑ ΠΟΥ ΜΙΛΗΣΑΝ στη συνεδρίαση.
+  - Μορφή: "«Προσφώνηση» Ονοματεπώνυμο — θέμα ομιλίας σε μία γραμμή"
+• ΜΗΝ εφευρίσκεις ονόματα ή αξιώματα που δεν αναφέρονται ρητά.
+• Χρησιμοποίησε ΠΑΝΤΑ την επίσημη προσφώνηση του πρωτοκόλλου.
 
-Επέστρεψε ΜΟΝΟ valid JSON, χωρίς markdown, χωρίς backticks, με ακριβώς αυτά τα keys:
-{
+ΓΕΝΙΚΟΙ ΚΑΝΟΝΕΣ:
+- Μην εφευρίσκεις ονόματα, ποσά, αποφάσεις ή αριθμούς αν δεν υπάρχουν καθαρά.
+- Αν κάτι δεν προκύπτει, άφησέ το κενό ή "Δεν προέκυψε σαφώς".
+- Επίσημο, αρχαιοπρεπές, γραμματειακό ύφος.
+- Χρησιμοποίησε: Σεβ∴ Διδ∴, Αδ∴, Αδδ∴, Σ∴ Στ∴, Βαθμ∴ Μαθ∴/Ετ∴/Διδ∴, Γραμμ∴, Ρήτ∴
+
+Υποχρεωτική δομή κειμένου πρακτικών:
+• Έναρξη • Παρόντες • Θέσεις αξιωματικών • Αλληλογραφία
+• Επικύρωση προηγ. πρακτικών • Εργασίες/Ομιλίες/Αποφάσεις
+• Κεφ. Αγαθοεργίας • Κλείσιμο
+
+Επέστρεψε ΜΟΝΟ valid JSON χωρίς markdown/backticks:
+{{
   "ημερομηνία": "DD/MM/YYYY",
   "ημέρα": "",
   "βαθμός_γενική": "Μαθητού",
@@ -517,16 +613,17 @@ def format_into_praktiko(
   "παρόντες_αριθμός": 0,
   "παρόντες_ολογράφως": "",
   "ημερησία_διάταξη": [],
+  "χαιρετισμοί_κατά_σειράν": [],
+  "ομιλητές_κατά_σειράν": [],
   "κείμενο_πρακτικών": "",
   "αποφάσεις": [],
   "κορμός_αγαθοεργίας": 0.0,
   "κορμός_ολογράφως": "",
   "γραμματεύς": "",
   "ρήτωρ": ""
-}
+}}
 """.strip()
 
-    # Αποθηκεύουμε το raw εκτός try ώστε να είναι διαθέσιμο στο except
     raw = ""
     try:
         msg = client.messages.create(
@@ -536,32 +633,38 @@ def format_into_praktiko(
             messages=[{
                 "role": "user",
                 "content": (
-                    f"Πλαίσιο συνεδρίασης από τη φόρμα:\n{context or '-'}\n\n"
+                    f"Πλαίσιο συνεδρίασης:\n{context or '-'}\n\n"
                     f"{source_label}:\n{transcript}"
                 ),
             }],
         )
         raw = msg.content[0].text if msg.content else ""
 
-        # ── ΔΙΟΡΘΩΣΗ: χρησιμοποιούμε την _extract_json αντί του αδύναμου regex ──
+        # ── Χρησιμοποιούμε την _extract_json (διορθωμένο parsing) ──
         result = _extract_json(raw)
         if result is None:
-            raise json.JSONDecodeError("No valid JSON found in Claude response", raw, 0)
+            raise json.JSONDecodeError("No valid JSON found", raw, 0)
+
+        # Post-process: επαλήθευση ταξινόμησης χαιρετισμών κατά πρωτόκολλο
+        if isinstance(result.get("χαιρετισμοί_κατά_σειράν"), list):
+            result["χαιρετισμοί_κατά_σειράν"] = sort_officials_by_protocol(
+                result["χαιρετισμοί_κατά_σειράν"]
+            )
 
         result["μεταγραφή_λέξη_προς_λέξη"] = transcript
         return result, None
 
     except json.JSONDecodeError:
-        # Fallback: επιστρέφουμε skeleton με το raw κείμενο για χειροκίνητο έλεγχο
         return {
             "ημερομηνία": "", "ημέρα": "", "βαθμός_γενική": "Μαθητού",
             "τόπος": "", "σεβάσμιος": "", "παρόντες_αριθμός": 0,
             "παρόντες_ολογράφως": "", "ημερησία_διάταξη": [],
+            "χαιρετισμοί_κατά_σειράν": [], "ομιλητές_κατά_σειράν": [],
             "κείμενο_πρακτικών": raw,
             "αποφάσεις": [], "κορμός_αγαθοεργίας": 0.0,
             "κορμός_ολογράφως": "", "γραμματεύς": "", "ρήτωρ": "",
             "μεταγραφή_λέξη_προς_λέξη": transcript,
-        }, "⚠️ Ο Claude δεν επέστρεψε καθαρό JSON. Το κείμενο μπήκε στον editor για χειροκίνητο έλεγχο."
+        }, "⚠️ Ο Claude δεν επέστρεψε καθαρό JSON. Το κείμενο μπήκε στον editor."
     except Exception as e:
         return None, f"❌ Σφάλμα σύνταξης πρακτικών: {e}"
 
@@ -579,7 +682,7 @@ def process_audio_to_praktiko(
         progress_cb(82, "🧹 Καθαρισμός μεταγραφής…")
     transcript = clean_transcript(transcript)
     if progress_cb:
-        progress_cb(88, "📝 Σύνταξη επίσημων Πρακτικών με Claude…")
+        progress_cb(88, "📝 Σύνταξη Πρακτικών με Claude…")
     result, err = format_into_praktiko(transcript, context)
     if progress_cb:
         progress_cb(100, "✅ Ολοκληρώθηκε.")
@@ -620,7 +723,6 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table
 
     fs, fsb, fr, frb = register_dejavu_fonts()
-
     cnvy  = colors.HexColor(NAVY)
     cgold = colors.HexColor(GOLD)
 
@@ -642,6 +744,9 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
     def xe(t):
         return str(t or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
+    βαθμ = d.get("βαθμός_γενική", "Μαθητού") or "Μαθητού"
+    ημερ = d.get("ημερομηνία", "") or ""
+
     story = [
         Paragraph("Ε∴Δ∴Τ∴Μ∴Α∴Τ∴Σ∴", H1),
         Spacer(1, 0.15 * cm),
@@ -651,21 +756,28 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
         Spacer(1, 0.1 * cm),
         Paragraph("Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ υπ' αρ. 84       εν Αν∴Αθ∴", LDG),
         HRFlowable(width="100%", thickness=1.5, color=cnvy, spaceAfter=8),
+        Paragraph(f"Πρακτικόν Συνεδρίας της {xe(ημερ)} εις Βαθμ∴ {xe(βαθμ[:3])}∴", TTL),
     ]
 
-    βαθμ = d.get("βαθμός_γενική", "Μαθητού") or "Μαθητού"
-    ημερ = d.get("ημερομηνία", "") or ""
-    story.append(Paragraph(f"Πρακτικόν Συνεδρίας της {xe(ημερ)} εις Βαθμ∴ {xe(βαθμ[:3])}∴", TTL))
-
+    # Ημερησία Διάταξη
     agenda = d.get("ημερησία_διάταξη", []) or []
     if agenda:
         story += [Spacer(1, 0.2 * cm), Paragraph("<b>Ημερησία Διάταξις:</b>", HDA)]
         for item in agenda:
             story.append(Paragraph(f"– {xe(item)}", BUL))
-        story.append(Spacer(1, 0.2 * cm))
+        story.append(Spacer(1, 0.15 * cm))
 
     story.append(HRFlowable(width="100%", thickness=0.5, color=cgold, spaceAfter=10))
 
+    # Χαιρετισμοί κατά πρωτόκολλο
+    xairetismoi = d.get("χαιρετισμοί_κατά_σειράν", []) or []
+    if xairetismoi:
+        story += [Paragraph("<b>Χαιρετισμοί κατά πρωτόκολλον (Εγκ. 27/2019):</b>", HDA)]
+        for item in xairetismoi:
+            story.append(Paragraph(f"– {xe(item)}", BUL))
+        story.append(Spacer(1, 0.15 * cm))
+
+    # Κύριο κείμενο πρακτικών
     body = d.get("κείμενο_πρακτικών", "") or ""
     for para in body.split("\n\n"):
         para = para.strip()
@@ -678,12 +790,23 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
         else:
             story.append(Paragraph(xe(para.replace("\n", " ")), BOD))
 
+    # Ομιλητές
+    omilites = d.get("ομιλητές_κατά_σειράν", []) or []
+    if omilites:
+        story += [Spacer(1, 0.1 * cm), Paragraph("<b>Έλαβον τον λόγον:</b>", HDA)]
+        for item in omilites:
+            story.append(Paragraph(f"– {xe(item)}", BUL))
+        story.append(Spacer(1, 0.15 * cm))
+
+    # Κορμός Αγαθοεργίας
     κορμ = float(d.get("κορμός_αγαθοεργίας", 0) or 0)
     κολ  = d.get("κορμός_ολογράφως", "") or ""
     if κορμ:
         story.append(Paragraph(
-            f"Εκ του Κορμού της Αγαθοεργίας εβλάστησαν <b>{xe(κολ)} ({κορμ:.2f})</b> όστρακα.", BOD))
+            f"Εκ του Κορμού της Αγαθοεργίας εβλάστησαν <b>{xe(κολ)} ({κορμ:.2f})</b> όστρακα.",
+            BOD))
 
+    # Κλείσιμο
     σεβ = d.get("σεβάσμιος", "") or ""
     closing = (
         f"Τέλος, οι Εργασίες έκλεισαν κανονικώς υπό την Σφύραν του Σεβ∴ Διδ∴ "
@@ -696,6 +819,7 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
         Spacer(1, 1.5 * cm),
     ]
 
+    # Υπογραφές
     γραμ = d.get("γραμματεύς", "") or ""
     ρητ  = d.get("ρήτωρ", "") or ""
 
@@ -751,12 +875,47 @@ def show_editor(r: dict, key_prefix: str = "") -> dict:
             float(r.get("κορμός_αγαθοεργίας", 0) or 0), step=1.0, format="%.2f", key=f"{key_prefix}kor")
         r["κορμός_ολογράφως"]   = st.text_input("Κορμός ολογράφως", r.get("κορμός_ολογράφως", ""), key=f"{key_prefix}koro")
 
+    # Ημερησία Διάταξη
     st.markdown("#### 📋 Ημερησία Διάταξη")
     agenda_raw = st.text_area("Ένα θέμα ανά γραμμή:",
         "\n".join(r.get("ημερησία_διάταξη", []) or []),
         height=90, label_visibility="collapsed", key=f"{key_prefix}agd")
     r["ημερησία_διάταξη"] = [l.strip() for l in agenda_raw.splitlines() if l.strip()]
 
+    # Χαιρετισμοί κατά πρωτόκολλο
+    st.markdown("#### 🎩 Χαιρετισμοί κατά πρωτόκολλον (Εγκ. 27/2019)")
+    st.caption(
+        "Ένας ανά γραμμή. Μορφή: «Προσφώνηση Ονοματεπώνυμο — Αξίωμα»  "
+        "π.χ. «Ενδοξότατε Μέγ∴ Διδ∴ Ιωάννης Παπαδόπουλος — Μέγας Διδάσκαλος»"
+    )
+    xairet_raw = st.text_area(
+        "Χαιρετισμοί",
+        "\n".join(r.get("χαιρετισμοί_κατά_σειράν", []) or []),
+        height=130, label_visibility="collapsed", key=f"{key_prefix}xrt",
+    )
+    r["χαιρετισμοί_κατά_σειράν"] = [l.strip() for l in xairet_raw.splitlines() if l.strip()]
+
+    col_sort, _ = st.columns([1, 3])
+    with col_sort:
+        if st.button("🔀 Αυτόματη ταξινόμηση κατά πρωτόκολλο",
+                     key=f"{key_prefix}sort_xrt", use_container_width=True):
+            r["χαιρετισμοί_κατά_σειράν"] = sort_officials_by_protocol(
+                r["χαιρετισμοί_κατά_σειράν"]
+            )
+            st.success("✅ Η λίστα ταξινομήθηκε.")
+            st.rerun()
+
+    # Ομιλητές
+    st.markdown("#### 🎤 Ομιλητές (με τη σειρά λήψης λόγου)")
+    st.caption("Ένας ανά γραμμή. Μορφή: «Προσφώνηση Ονοματεπώνυμο — θέμα σε μία γραμμή»")
+    omil_raw = st.text_area(
+        "Ομιλητές",
+        "\n".join(r.get("ομιλητές_κατά_σειράν", []) or []),
+        height=110, label_visibility="collapsed", key=f"{key_prefix}oml",
+    )
+    r["ομιλητές_κατά_σειράν"] = [l.strip() for l in omil_raw.splitlines() if l.strip()]
+
+    # Κείμενο πρακτικών
     st.markdown("#### 📄 Κείμενο Πρακτικών")
     r["κείμενο_πρακτικών"] = st.text_area("Κείμενο Πρακτικών",
         r.get("κείμενο_πρακτικών", ""),
@@ -802,6 +961,8 @@ def finalize_result(result, sel_σεβ, sel_γραμ, sel_ρητ, sel_βαθμ, 
         result["βαθμός_γενική"] = ΒΑΘΜΟΙ_GEN[sel_βαθμ]
     if not result.get("ημερομηνία"):
         result["ημερομηνία"] = sel_ημερ.strftime("%d/%m/%Y")
+    result.setdefault("χαιρετισμοί_κατά_σειράν", [])
+    result.setdefault("ομιλητές_κατά_σειράν", [])
     return result
 
 
@@ -812,14 +973,14 @@ def render_pdf_section(edited: dict, key_prefix: str):
     with col_gen:
         if st.button("📄 Δημιουργία PDF Πρακτικού", type="primary",
                      use_container_width=True, key=f"{key_prefix}_genpdf"):
-            with st.spinner("Δημιουργία PDF… (την πρώτη φορά κατεβαίνουν τα fonts ~2MB)"):
+            with st.spinner("Δημιουργία PDF…"):
                 try:
                     pdf = generate_praktiko_pdf(edited)
                     st.session_state[f"{key_prefix}_pdf_bytes"] = pdf.getvalue()
                     st.session_state[f"{key_prefix}_pdf_label"] = (
                         edited.get("ημερομηνία", "") or str(date.today())
                     ).replace("/", "_")
-                    st.success("✅ PDF έτοιμο με ελληνικούς χαρακτήρες.")
+                    st.success("✅ PDF έτοιμο.")
                 except Exception as e:
                     st.error(f"❌ Σφάλμα δημιουργίας PDF: {e}")
     with col_dl:
@@ -861,18 +1022,15 @@ with tab_audio:
         raw_bytes = audio_file.getvalue()
         size_mb = mb_size(raw_bytes)
         ext = audio_file.name.rsplit(".", 1)[-1].lower()
-        show_audio_preview = st.checkbox(
-            "🎧 Εμφάνιση audio player", value=False,
-            help="Για μεγάλα αρχεία, αφήστε το κλειστό.",
-        )
+        show_audio_preview = st.checkbox("🎧 Εμφάνιση audio player", value=False,
+                                         help="Για μεγάλα αρχεία, αφήστε το κλειστό.")
         if show_audio_preview:
-            with st.expander("🎧 Προεπισκόπηση ηχογράφησης", expanded=True):
-                st.warning("Για μεγάλα αρχεία, μην έχετε ανοιχτό ταυτόχρονα το audio player και την ακατέργαστη μεταγραφή.")
+            with st.expander("🎧 Προεπισκόπηση", expanded=True):
                 st.audio(raw_bytes, format=f"audio/{ext}")
         if size_mb > MAX_MB_RAW:
-            st.error(f"⛔ Το αρχείο είναι {size_mb:.1f}MB και ξεπερνά το όριο {MAX_MB_RAW}MB.")
+            st.error(f"⛔ {size_mb:.1f}MB > {MAX_MB_RAW}MB")
         else:
-            st.success(f"✅ {audio_file.name} — {size_mb:.1f}MB — έτοιμο για μεταγραφή.")
+            st.success(f"✅ {audio_file.name} — {size_mb:.1f}MB")
             st.session_state["aud_ready_audio"] = raw_bytes
             st.session_state["aud_ready_ext"]   = ext
 
@@ -894,7 +1052,7 @@ with tab_audio:
             progress_bar.progress(min(max(int(pct), 0), 100))
             status_text.info(msg)
 
-        aud_cb(1, f"🚀 Επεξεργασία αρχείου {mb_size(st.session_state['aud_ready_audio']):.1f}MB…")
+        aud_cb(1, f"🚀 Επεξεργασία {mb_size(st.session_state['aud_ready_audio']):.1f}MB…")
         try:
             result, err = process_audio_to_praktiko(
                 st.session_state["aud_ready_audio"],
@@ -914,7 +1072,7 @@ with tab_audio:
             st.session_state["aud_praktiko"] = finalize_result(
                 result, a_σεβ, a_γραμ, a_ρητ, a_βαθμ, a_ημερ)
             st.session_state.pop("aud_editable_raw", None)
-            st.success("✅ Έτοιμο. Ελέγξτε/διορθώστε πρώτα την ακατέργαστη μεταγραφή.")
+            st.success("✅ Έτοιμο.")
 
     if "aud_praktiko" in st.session_state:
         raw_tr = st.session_state["aud_praktiko"].get("μεταγραφή_λέξη_προς_λέξη", "")
@@ -924,7 +1082,7 @@ with tab_audio:
                 if "aud_editable_raw" not in st.session_state:
                     st.session_state["aud_editable_raw"] = raw_tr[:edit_limit]
                 edited_raw = st.text_area(
-                    "Ακατέργαστη μεταγραφή", st.session_state["aud_editable_raw"],
+                    "Μεταγραφή", st.session_state["aud_editable_raw"],
                     height=400, label_visibility="collapsed", key="aud_raw_ta",
                 )
                 st.session_state["aud_editable_raw"] = edited_raw
@@ -936,7 +1094,7 @@ with tab_audio:
                     ctx2 = (
                         f"Βαθμός: {st.session_state.get('aud_last_βαθμ', '')}\n"
                         f"Ημερομηνία: {st.session_state.get('aud_last_ημερ', '')}\n"
-                        f"Επιπλέον: διορθωμένη μεταγραφή από τον χρήστη"
+                        "Επιπλέον: διορθωμένη μεταγραφή από τον χρήστη"
                     )
                     with st.spinner("Σύνταξη νέου πρακτικού…"):
                         upd, ue = format_into_praktiko(edited_raw, ctx2)
@@ -962,19 +1120,17 @@ with tab_word:
 
     st.markdown("---")
     st.markdown("### Βήμα 2 · Αρχείο Word (.docx)")
-    st.caption(
-        "Ανεβάστε αρχείο **.docx** — σημειώσεις, προσχέδιο ή ακατέργαστο κείμενο συνεδρίασης. "
-        "Το κείμενο εξάγεται αυτόματα και ο Claude συντάσσει τα επίσημα Πρακτικά."
-    )
+    st.caption("Ανεβάστε **.docx** — σημειώσεις, προσχέδιο ή ακατέργαστο κείμενο. "
+               "Το κείμενο εξάγεται αυτόματα και ο Claude συντάσσει τα Πρακτικά.")
     word_file = st.file_uploader("Ανεβάστε αρχείο .docx — max 50MB",
                                   type=["docx"], key="wrd_uploader")
     if word_file:
         wrd_bytes = word_file.getvalue()
         wrd_mb = mb_size(wrd_bytes)
         if wrd_mb > 50:
-            st.error(f"⛔ Το αρχείο είναι {wrd_mb:.1f}MB και ξεπερνά το όριο 50MB.")
+            st.error(f"⛔ {wrd_mb:.1f}MB > 50MB")
         else:
-            st.success(f"✅ {word_file.name} — {wrd_mb:.1f}MB — έτοιμο για επεξεργασία.")
+            st.success(f"✅ {word_file.name} — {wrd_mb:.1f}MB")
             st.session_state["wrd_ready_bytes"] = wrd_bytes
             st.session_state["wrd_ready_name"]  = word_file.name
 
@@ -1011,7 +1167,7 @@ with tab_word:
                 st.warning(err)
             st.session_state["wrd_praktiko"] = finalize_result(
                 result, w_σεβ, w_γραμ, w_ρητ, w_βαθμ, w_ημερ)
-            st.success("✅ Έτοιμο. Ελέγξτε και διορθώστε τα πρακτικά στον editor.")
+            st.success("✅ Έτοιμο.")
 
     if "wrd_praktiko" in st.session_state:
         raw_wrd = st.session_state["wrd_praktiko"].get("μεταγραφή_λέξη_προς_λέξη", "")
@@ -1024,7 +1180,7 @@ with tab_word:
                     ctx2 = (
                         f"Βαθμός: {st.session_state.get('wrd_last_βαθμ', '')}\n"
                         f"Ημερομηνία: {st.session_state.get('wrd_last_ημερ', '')}\n"
-                        f"Επιπλέον: επανασύνταξη από το ίδιο κείμενο Word"
+                        "Επιπλέον: επανασύνταξη από το ίδιο κείμενο Word"
                     )
                     with st.spinner("Επανασύνταξη…"):
                         upd, ue = format_into_praktiko(
@@ -1048,7 +1204,6 @@ with tab_word:
 with tab_help:
     st.markdown("""
     ## Ροή εργασίας — Ηχογράφηση
-
     1. Συμπληρώνετε βαθμό, ημερομηνία και αξιωματικούς.
     2. Ανεβάζετε αρχείο ήχου (wav/mp3/m4a/ogg/webm/aac).
     3. Πατάτε **Μεταγραφή & Σύνταξη Πρακτικών**.
@@ -1057,26 +1212,35 @@ with tab_help:
     6. Δημιουργείτε PDF.
 
     ## Ροή εργασίας — Word
-
     1. Συμπληρώνετε βαθμό, ημερομηνία και αξιωματικούς.
-    2. Ανεβάζετε αρχείο **.docx** (σημειώσεις, προσχέδιο, ακατέργαστο κείμενο).
+    2. Ανεβάζετε αρχείο **.docx**.
     3. Πατάτε **Ανάγνωση Word & Σύνταξη Πρακτικών**.
     4. Ελέγχετε το εξαχθέν κείμενο.
-    5. Διορθώνετε το πρακτικό στον editor.
+    5. Διορθώνετε στον editor.
     6. Δημιουργείτε PDF.
 
-    ## Fonts & Ελληνικοί Χαρακτήρες στο PDF
+    ## Πρωτόκολλο Τάξης Προσφωνήσεων (Εγκ. 27/2019 — Πίνακας Α)
 
-    Το app χρησιμοποιεί τα **DejaVu fonts** (open-source) για πλήρη υποστήριξη
-    ελληνικών χαρακτήρων. Αν βρεθούν στο φάκελο `fonts/` του project,
-    χρησιμοποιούνται από εκεί. Αλλιώς **κατεβαίνουν αυτόματα** (~2MB) από το
-    GitHub repo των DejaVu fonts και αποθηκεύονται στο `/tmp/` για το τρέχον session.
+    | # | Αξίωμα | Προσφώνηση |
+    |---|--------|------------|
+    | 1 | Μέγας Διδάσκαλος Μ∴Σ∴Τ∴Ε∴ | Ενδοξότατε Μέγ∴ Διδ∴ |
+    | 2 | Επίτιμοι Μέγ∴ Διδάσκαλοι | Ενδοξότατε Επίτ∴ Μέγ∴ Διδ∴ |
+    | 3 | Πρώην Μέγ∴ Διδάσκαλοι | Ενδοξότατε πρ∴ Μέγ∴ Διδ∴ |
+    | 4 | Πρόσθετος Μέγ∴ Διδάσκαλος | Ενδοξότατε Πρόσθ∴ Μέγ∴ Διδ∴ |
+    | 5 | Ένδοξοι Μέγ∴ Αξιωματικοί Συμβ∴ | Ένδοξε Μέγ∴ Αξ∴ |
+    | 6 | Πρώην Μέγ∴ Αξιωματικοί Συμβ∴ | Ένδ∴ Αδ∴ πρ∴ Μέγ∴ Αξ∴ |
+    | 7 | Επίτιμα Μέλη Μ∴Σ∴Τ∴Ε∴ | Επίτιμε |
+    | 8 | Ενεργοί Κοσμήτορες | Αιδεσιμ∴ Κοσμ∴ |
+    | 9 | Ομότιμοι Κοσμήτορες | Αιδεσιμ∴ ομότ∴ Κοσμ∴ |
+    | 10 | Μέγ∴ Επιθεωρητής Στοάς | Σεβ∴ Μέγ∴ Επιθ∴ |
+    | 11 | Σεβάσμιος εν ενεργεία | Σεβ∴ Διδ∴ |
+    | 12 | Πρώην Σεβάσμιοι | Αιδεσιμ∴ πρ∴ Σεβ∴ |
+    | 13+ | Αξιωματικοί & μέλη Στοάς | Αδ∴ |
 
-    Για μόνιμη εγκατάσταση (χωρίς download σε κάθε reboot):
-    προσθέστε τα αρχεία `.ttf` στο φάκελο `fonts/` του repository σας.
+    Ο Claude αναγνωρίζει **αυτόματα** τα αξιώματα από τη μεταγραφή και τα τοποθετεί
+    στη σωστή σειρά. Στον editor υπάρχει και κουμπί **🔀 Αυτόματη ταξινόμηση**.
 
     ## Streamlit Secrets
-
     ```toml
     [AI]
     OPENAI_API_KEY = "sk-..."
@@ -1084,11 +1248,8 @@ with tab_help:
     ```
 
     ## requirements.txt
-
-    ```txt
+    ```
     streamlit>=1.30
-    pandas>=2.0
-    plotly>=5.0
     reportlab>=4.0
     anthropic>=0.25
     openai>=1.50.0
@@ -1097,22 +1258,7 @@ with tab_help:
     ```
 
     ## packages.txt
-
-    ```txt
+    ```
     ffmpeg
     ```
-
-    ## Συμβουλές για το αρχείο Word
-
-    - Το .docx μπορεί να είναι απλές σημειώσεις, ακατέργαστο πρακτικό ή transcript.
-    - Πίνακες, επικεφαλίδες και παράγραφοι αναγνωρίζονται αυτόματα.
-    - Στο "Επιπλέον πλαίσιο" αναφέρετε αν το κείμενο χρειάζεται περίληψη ομιλιών.
-    - Μετά τη σύνταξη μπορείτε να πατήσετε **Επανασύνταξη** χωρίς νέο upload.
-
-    ## Σημαντικές πρακτικές για καλύτερη μεταγραφή
-
-    - Το κινητό να είναι κοντά στους ομιλητές.
-    - Προτιμήστε WAV, M4A ή MP3 με καθαρό ήχο.
-    - Μειώστε θόρυβο, μουσική και παράλληλες συζητήσεις.
-    - Στο πεδίο "Επιπλέον πλαίσιο" γράψτε ονόματα, θέματα και γνωστούς όρους.
     """)
