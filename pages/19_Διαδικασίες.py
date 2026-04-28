@@ -483,6 +483,61 @@ DIKADIKASIEES: Dict[str, Dict] = {
             "Επίσημη γλώσσα και τεκτονικές συντομογραφίες."
         ),
     },
+
+    "🏅 Αίτηση Εγκατάστασης Νέων Αξιωματικών": {
+        "code": "egkatastasi",
+        "subtitle": "Άρθρο 88 Γ.Κ. — Μετά τον Εγκριτικό Πίνακα",
+        "description": (
+            "Επιστολή προς τη Μεγ. Γεν. Γραμματεία για ορισμό ημερομηνίας "
+            "Εγκατάστασης νέων Αξιωματικών, εντός 30 ημερών από τον Εγκριτικό Πίνακα (άρ. 88)."
+        ),
+        "deadline_note": "⏱️ Εντός 30 ημερών από τον Εγκριτικό Πίνακα (άρ. 88 Γ.Κ.).",
+        "steps": [
+            ("1", "Λήψη Εγκριτικού Πίνακα Εκλογής από Μεγ. Γεν. Γραμματεία", ["Άρ. 86"]),
+            ("2", "Καταγραφή Αρ. Πρωτ. & ημερομηνίας Εγκριτικού Πίνακα", []),
+            ("3", "Πρόταση 2-3 διαθέσιμων ημερομηνιών για Εγκατάσταση", []),
+            ("4", "Αποστολή Αίτησης Εγκατάστασης στη Μεγ. Γεν. Γραμματεία", ["Άρ. 88"]),
+            ("5", "Λήψη επιβεβαίωσης & ορισμός Επισκέπτη Αξιωματικού", []),
+            ("6", "Τελέσεις Εγκατάστασης — αναγγελία στη Μεγ. Γεν. Γραμμ.", []),
+        ],
+        "forms": [
+            {"name": "6. Αίτηση Ορισμού Ημερομηνίας Εγκατάστασης",
+             "file": "ekloges/6_-_ΑΙΤΗΣΗ_ΕΓΚΑΤΑΣΤΑΣΗΣ.docx",
+             "description": "Επίσημη επιστολή αίτησης εγκατάστασης"},
+        ],
+        "input_groups": [
+            {
+                "title": "📨 Στοιχεία Εγκριτικού Πίνακα (που ελήφθη)",
+                "fields": [
+                    ("egk_proto",     "Αρ. Πρωτ. Εγκριτικού Πίνακα", "text", "96802"),
+                    ("egk_imerominia","Ημ/νία Εγκριτικού",            "date", ""),
+                    ("ekl_diettia",   "Τεκτ. Διετία",                 "text", "2025-2027"),
+                ],
+            },
+            {
+                "title": "📅 Προτεινόμενες Ημερομηνίες Εγκατάστασης",
+                "fields": [
+                    ("prot_imerom_1", "1η Προτεινόμενη Ημερ.",  "date", ""),
+                    ("prot_imerom_2", "2η Προτεινόμενη Ημερ.",  "date", ""),
+                    ("prot_imerom_3", "3η Προτεινόμενη Ημερ.",  "date", ""),
+                ],
+            },
+            {
+                "title": "📋 Στοιχεία Επιστολής",
+                "fields": [
+                    ("stoaa_proto",        "Αρ. Πρωτ. Επιστολής",  "text",   ""),
+                    ("imerominia_epistolis","Ημ/νία Επιστολής",     "date",   ""),
+                    ("st_sev",             "Σεβάσμιος",             "member", ""),
+                    ("st_gramm",           "Γραμματεύς",            "member", ""),
+                ],
+            },
+        ],
+        "claude_hint": (
+            "Αίτηση ορισμού ημερομηνίας εγκατάστασης νέων αξιωματικών Τεκτονικής Στοάς. "
+            "Γράψε σε επίσημη τεκτονική γλώσσα αναφερόμενος στον Εγκριτικό Πίνακα. "
+            "Βάσει άρθρου 88 Γεν. Κανονισμού ΜΣΤΕ."
+        ),
+    },
 }
 
 STOAA_NAME = "ΑΚΡΟΠΟΛΙΣ"
@@ -744,6 +799,67 @@ def fill_docx_smart(
     diettia_parts = diettia.replace("-", " / ").replace("–", " / ")
     imerominia = get_field("ekl_imerominia")
     psifisantes = get_field("ekl_psifisantes")
+
+
+    # ══════════════════════════════════════════════════════════
+    # FORM 6: ΑΙΤΗΣΗ ΕΓΚΑΤΑΣΤΑΣΗΣ  ({{placeholder}} replacement)
+    # ══════════════════════════════════════════════════════════
+    if "6_-_ΑΙΤΗΣΗ_ΕΓΚΑΤ" in fname or "ΑΙΤΗΣΗ_ΕΓΚΑΤ" in fname:
+
+        def _fmt_date_gr(d: str) -> str:
+            try:
+                from datetime import datetime
+                return datetime.strptime(d, "%Y-%m-%d").strftime("%d/%m/%Y")
+            except Exception:
+                return d or "——"
+
+        repls6: Dict[str, str] = {
+            "{{STOAA_NAME}}":          stoaa_data.get("name", STOAA_NAME),
+            "{{STOAA_NUMBER}}":        stoaa_data.get("number", STOAA_NUMBER),
+            "{{STOAA_ANATOLI}}":       stoaa_data.get("anatoli", STOAA_ANATOLI),
+            "{{STOAA_PROTO}}":         get_field("stoaa_proto"),
+            "{{IMEROMINIA_EPISTOLIS}}":_fmt_date_gr(get_field("imerominia_epistolis")),
+            "{{EGK_PROTO}}":           get_field("egk_proto"),
+            "{{EGK_IMEROMINIA}}":      _fmt_date_gr(get_field("egk_imerominia")),
+            "{{EKL_DIETTIA}}":         get_field("ekl_diettia") or "2025-2027",
+            "{{PROT_IMEROM_1}}":       _fmt_date_gr(get_field("prot_imerom_1")),
+            "{{PROT_IMEROM_2}}":       _fmt_date_gr(get_field("prot_imerom_2")),
+            "{{PROT_IMEROM_3}}":       _fmt_date_gr(get_field("prot_imerom_3")),
+            "{{SEV_FULLNAME}}":        _member_full_name(get_member("st_sev")),
+            "{{GRAMM_FULLNAME}}":      _member_full_name(get_member("st_gramm")),
+        }
+
+        def _replace_placeholders(document, repls):
+            for para in document.paragraphs:
+                full = "".join(r.text for r in para.runs)
+                changed = False
+                for old, new in repls.items():
+                    if old in full:
+                        full = full.replace(old, new)
+                        changed = True
+                if changed and para.runs:
+                    para.runs[0].text = full
+                    for r in para.runs[1:]:
+                        r.text = ""
+            for tbl in document.tables:
+                for row in tbl.rows:
+                    for cell in row.cells:
+                        for para in cell.paragraphs:
+                            full = "".join(r.text for r in para.runs)
+                            changed = False
+                            for old, new in repls.items():
+                                if old in full:
+                                    full = full.replace(old, new)
+                                    changed = True
+                            if changed and para.runs:
+                                para.runs[0].text = full
+                                for r in para.runs[1:]:
+                                    r.text = ""
+
+        _replace_placeholders(doc, repls6)
+        buf6 = io.BytesIO()
+        doc.save(buf6)
+        return buf6.getvalue()
 
     # ══════════════════════════════════════════════════════════
     # FORM 4: ΚΑΤΑΣΤΑΣΗ ΕΚΛΕΓΕΝΤΩΝ ΑΞΙΩΜΑΤΙΚΩΝ
