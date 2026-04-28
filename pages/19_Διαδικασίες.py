@@ -515,11 +515,9 @@ DIKADIKASIEES: Dict[str, Dict] = {
                 ],
             },
             {
-                "title": "📅 Προτεινόμενες Ημερομηνίες Εγκατάστασης",
+                "title": "📅 Στοιχεία Εγκατάστασης",
                 "fields": [
-                    ("prot_imerom_1", "1η Προτεινόμενη Ημερ.",  "date", ""),
-                    ("prot_imerom_2", "2η Προτεινόμενη Ημερ.",  "date", ""),
-                    ("prot_imerom_3", "3η Προτεινόμενη Ημερ.",  "date", ""),
+                    ("imerominia_egkat", "Ημ/νία Εγκατάστασης", "date", ""),
                 ],
             },
             {
@@ -822,9 +820,7 @@ def fill_docx_smart(
             "{{EGK_PROTO}}":           get_field("egk_proto"),
             "{{EGK_IMEROMINIA}}":      _fmt_date_gr(get_field("egk_imerominia")),
             "{{EKL_DIETTIA}}":         get_field("ekl_diettia") or "2025-2027",
-            "{{PROT_IMEROM_1}}":       _fmt_date_gr(get_field("prot_imerom_1")),
-            "{{PROT_IMEROM_2}}":       _fmt_date_gr(get_field("prot_imerom_2")),
-            "{{PROT_IMEROM_3}}":       _fmt_date_gr(get_field("prot_imerom_3")),
+            "{{IMEROMINIA_EGKAT}}":    _fmt_date_gr(get_field("imerominia_egkat")),
             "{{SEV_FULLNAME}}":        _member_full_name(get_member("st_sev")),
             "{{GRAMM_FULLNAME}}":      _member_full_name(get_member("st_gramm")),
         }
