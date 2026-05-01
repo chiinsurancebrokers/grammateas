@@ -2,33 +2,34 @@
 """
 Page 20 — Hybrid AI Transcription & Formal Minutes Generator
 
+Final version for Streamlit.
+
 Features:
+  • Manual API key input in sidebar if Streamlit secrets fail
+  • Reads OpenAI / Claude keys from:
+      1. manual sidebar input
+      2. Streamlit root secrets
+      3. Streamlit [AI] nested secrets
+      4. environment variables
   • Audio upload: m4a/mp3/wav/mp4/webm/mpeg/mpga
-  • Automatic chunking for large audio using imageio-ffmpeg
+  • Automatic chunking for large audio using imageio-ffmpeg / ffmpeg
   • OpenAI transcription for each chunk
   • Re-composition into one full transcript
-  • Structured JSON extraction:
-      - speakers
-      - present members
-      - dates
-      - agenda
-      - decisions
-      - actions / pending items
-      - uncertainties
-  • Auto-detect Claude:
-      - Claude used for formal minutes if ANTHROPIC_API_KEY exists
-      - OpenAI fallback if Claude is missing or fails
-  • Formal τεκτονικό prompt, aligned with Page 19 style
-  • Direct Word / PDF / TXT export
+  • Structured JSON extraction with OpenAI
+  • Claude auto-detect for formal minutes synthesis
+  • OpenAI fallback if Claude is missing or fails
+  • Word / PDF / TXT export
 
-Secrets supported:
-  OPENAI_API_KEY = "sk-..."
-  ANTHROPIC_API_KEY = "sk-ant-..."
-
-or nested:
-  [AI]
-  OPENAI_API_KEY = "sk-..."
-  ANTHROPIC_API_KEY = "sk-ant-..."
+Recommended requirements.txt:
+streamlit>=1.30
+pandas>=2.0
+plotly>=5.0
+anthropic>=0.25
+openai>=1.50.0
+Pillow
+reportlab>=4.0
+python-docx>=1.0.0
+imageio-ffmpeg>=0.4.9
 """
 
 import html
@@ -41,7 +42,7 @@ import subprocess
 import tempfile
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import streamlit as st
 from openai import BadRequestError, OpenAI
@@ -65,7 +66,7 @@ st.set_page_config(
 
 st.markdown("# 🎤 Μεταγραφή & Σύνθεση Πρακτικών με AI")
 st.caption(
-    "OpenAI transcription με αυτόματο chunking · Claude/OpenAI για σύνθεση επίσημου πρακτικού · Word/PDF export"
+    "OpenAI transcription με αυτόματο chunking · Claude/OpenAI για σύνθεση επίσημου πρακτικού · Word/PDF/TXT export"
 )
 
 
@@ -78,30 +79,56 @@ DEFAULT_STOAA = "Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ υπ’ αρ. 84"
 
 
 # ══════════════════════════════════════════════════════════════
-# SECRETS / CLIENTS
+# API KEY HELPERS
 # ══════════════════════════════════════════════════════════════
 def get_secret(name: str) -> str:
-    """Reads secret from root, nested [AI], or environment."""
+    """
+    Reads API key in this order:
+    1. Manual sidebar input saved in session_state
+    2. Streamlit root secrets
+    3. Streamlit nested [AI] secrets
+    4. Environment variables
+    """
+    manual_map = {
+        "OPENAI_API_KEY": "MANUAL_OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY": "MANUAL_ANTHROPIC_API_KEY",
+    }
+
+    manual_key = manual_map.get(name)
+    if manual_key and st.session_state.get(manual_key):
+        return str(st.session_state[manual_key]).strip()
+
     try:
         root_value = st.secrets.get(name, "")
         if root_value:
-            return str(root_value)
+            return str(root_value).strip()
+    except Exception:
+        pass
 
+    try:
         ai_section = st.secrets.get("AI", {})
         if isinstance(ai_section, dict):
             nested_value = ai_section.get(name, "")
             if nested_value:
-                return str(nested_value)
+                return str(nested_value).strip()
     except Exception:
         pass
 
-    return os.getenv(name, "")
+    return os.getenv(name, "").strip()
+
+
+def mask_key(key: str) -> str:
+    if not key:
+        return "not set"
+    if len(key) <= 12:
+        return "set"
+    return f"{key[:7]}...{key[-4:]}"
 
 
 def get_openai_client() -> OpenAI:
     key = get_secret("OPENAI_API_KEY")
     if not key:
-        st.error("❌ Δεν βρέθηκε OPENAI_API_KEY στα Streamlit secrets ή στα environment variables.")
+        st.error("❌ Δεν βρέθηκε OPENAI_API_KEY. Βάλ’ το στο sidebar ή στα Streamlit secrets.")
         st.stop()
     return OpenAI(api_key=key)
 
@@ -115,30 +142,32 @@ def get_anthropic_client():
         import anthropic
         return anthropic.Anthropic(api_key=key)
     except Exception as exc:
-        st.warning(f"⚠️ Βρέθηκε ANTHROPIC_API_KEY, αλλά δεν φορτώθηκε το anthropic package: {exc}")
+        st.warning(f"⚠️ Βρέθηκε Claude API key, αλλά δεν φορτώθηκε το anthropic package: {exc}")
         return None
 
 
-def ai_status_badge() -> None:
-    openai_ok = bool(get_secret("OPENAI_API_KEY"))
-    claude_ok = bool(get_secret("ANTHROPIC_API_KEY"))
+def show_api_status() -> None:
+    openai_key = get_secret("OPENAI_API_KEY")
+    anthropic_key = get_secret("ANTHROPIC_API_KEY")
 
-    if openai_ok:
-        st.success("✅ OpenAI API detected — transcription enabled")
-    else:
-        st.error("❌ OpenAI API missing — transcription will not work")
+    st.markdown("### 🔎 API Status")
 
-    if claude_ok:
-        st.success("✅ Claude API detected — formal minutes will use Claude")
+    if openai_key:
+        st.success(f"✅ OpenAI detected: {mask_key(openai_key)}")
     else:
-        st.info("ℹ️ Claude API not detected — minutes fallback to OpenAI")
+        st.error("❌ OpenAI API missing")
+
+    if anthropic_key:
+        st.success(f"✅ Claude detected: {mask_key(anthropic_key)}")
+    else:
+        st.info("ℹ️ Claude missing — θα γίνει fallback σε OpenAI για τη σύνθεση πρακτικού")
 
 
 # ══════════════════════════════════════════════════════════════
 # FFMPEG HELPERS
 # ══════════════════════════════════════════════════════════════
 def get_ffmpeg_path() -> str:
-    """Uses imageio-ffmpeg bundled binary where available."""
+    """Uses bundled ffmpeg from imageio-ffmpeg where available."""
     try:
         import imageio_ffmpeg
         return imageio_ffmpeg.get_ffmpeg_exe()
@@ -179,7 +208,7 @@ def get_audio_duration_seconds(input_path: str) -> float:
 
 
 def split_audio_to_chunks(input_path: str, output_dir: str, target_mb: int = SAFE_CHUNK_MB) -> List[str]:
-    """Converts/splits audio to MP3 mono 16k chunks under safe upload size."""
+    """Converts and splits audio to MP3 mono 16k chunks under safe upload size."""
     input_size_mb = os.path.getsize(input_path) / (1024 * 1024)
 
     if input_size_mb <= target_mb:
@@ -265,7 +294,13 @@ def split_audio_to_chunks(input_path: str, output_dir: str, target_mb: int = SAF
 # TRANSCRIPTION
 # ══════════════════════════════════════════════════════════════
 def transcribe_single_file(client: OpenAI, path: str, language: str = "el") -> str:
-    """Stable transcription for one chunk."""
+    """Transcribes one audio file/chunk using OpenAI."""
+    size_mb = os.path.getsize(path) / (1024 * 1024)
+
+    if size_mb > 24.5:
+        st.error(f"❌ Το chunk είναι ακόμη πολύ μεγάλο ({size_mb:.2f}MB).")
+        st.stop()
+
     try:
         with open(path, "rb") as audio:
             result = client.audio.transcriptions.create(
@@ -283,8 +318,15 @@ def transcribe_single_file(client: OpenAI, path: str, language: str = "el") -> s
             st.code(str(exc))
         st.stop()
 
+    except Exception as exc:
+        st.error("❌ Αποτυχία κατά τη μεταγραφή.")
+        with st.expander("Τεχνικές λεπτομέρειες"):
+            st.code(str(exc))
+        st.stop()
+
 
 def transcribe_with_chunking(client: OpenAI, uploaded_file, language: str = "el") -> Tuple[str, List[Dict[str, Any]]]:
+    """Save upload → split if needed → transcribe all chunks → recombine transcript."""
     original_suffix = Path(uploaded_file.name).suffix.lower() or ".m4a"
 
     with tempfile.TemporaryDirectory() as workdir:
@@ -388,7 +430,7 @@ def structured_extract_with_openai(client: OpenAI, transcript: str, meta: Dict[s
 - Μην επινοείς ονόματα ή αποφάσεις.
 - Αν κάτι δεν προκύπτει, βάλε το στο "uncertainties".
 - Αγνόησε τεχνικά markers όπως [CHUNK 1].
-- Οι αποφάσεις να είναι καθαρές, όχι γενικόλογες.
+- Οι αποφάσεις να είναι καθαρές και πρακτικές.
 - Οι ενέργειες να έχουν owner/deadline μόνο αν αναφέρονται.
 """.strip()
 
@@ -413,7 +455,7 @@ def structured_extract_with_openai(client: OpenAI, transcript: str, meta: Dict[s
 
 
 # ══════════════════════════════════════════════════════════════
-# FORMAL MINUTES SYNTHESIS — CLAUDE FIRST, OPENAI FALLBACK
+# MINUTES SYNTHESIS — CLAUDE FIRST, OPENAI FALLBACK
 # ══════════════════════════════════════════════════════════════
 def build_minutes_prompt(transcript: str, analysis: Dict[str, Any], meta: Dict[str, str]) -> str:
     return f"""
@@ -471,26 +513,37 @@ def draft_minutes_with_claude(anthropic_client, transcript: str, analysis: Dict[
 
     prompt = build_minutes_prompt(transcript, analysis, meta)
 
-    try:
-        message = anthropic_client.messages.create(
-            model="claude-sonnet-4-5",
-            max_tokens=6000,
-            temperature=0.2,
-            system=(
-                "Είσαι έμπειρος Γραμματεύς Τεκτονικής Στοάς. "
-                "Συντάσσεις επίσημα πρακτικά σε φυσικό, ανθρώπινο, τεκτονικό ύφος."
-            ),
-            messages=[{"role": "user", "content": prompt}],
-        )
+    model_candidates = [
+        "claude-sonnet-4-5",
+        "claude-3-5-sonnet-20241022",
+    ]
 
-        if message.content and hasattr(message.content[0], "text"):
-            return message.content[0].text.strip()
+    last_error = None
+    for model_name in model_candidates:
+        try:
+            message = anthropic_client.messages.create(
+                model=model_name,
+                max_tokens=6000,
+                temperature=0.2,
+                system=(
+                    "Είσαι έμπειρος Γραμματεύς Τεκτονικής Στοάς. "
+                    "Συντάσσεις επίσημα πρακτικά σε φυσικό, ανθρώπινο, τεκτονικό ύφος."
+                ),
+                messages=[{"role": "user", "content": prompt}],
+            )
 
-        return None
+            if message.content and hasattr(message.content[0], "text"):
+                st.caption(f"Claude model used: {model_name}")
+                return message.content[0].text.strip()
 
-    except Exception as exc:
-        st.warning(f"⚠️ Claude failed, fallback σε OpenAI. Λεπτομέρεια: {exc}")
-        return None
+        except Exception as exc:
+            last_error = exc
+            continue
+
+    if last_error:
+        st.warning(f"⚠️ Claude failed, fallback σε OpenAI. Λεπτομέρεια: {last_error}")
+
+    return None
 
 
 def draft_minutes_with_openai(client: OpenAI, transcript: str, analysis: Dict[str, Any], meta: Dict[str, str]) -> str:
@@ -733,7 +786,7 @@ def display_analysis(analysis: Dict[str, Any]) -> None:
 
 
 # ══════════════════════════════════════════════════════════════
-# UI
+# SIDEBAR UI
 # ══════════════════════════════════════════════════════════════
 with st.sidebar:
     st.markdown("## ⚙️ Ρυθμίσεις")
@@ -746,7 +799,37 @@ with st.sidebar:
     language = st.selectbox("Γλώσσα μεταγραφής", ["el", "en"], index=0)
 
     st.markdown("---")
-    ai_status_badge()
+    st.markdown("## 🔐 API Keys")
+    st.caption("Αν τα Streamlit secrets δεν διαβάζονται, βάλε τα keys προσωρινά εδώ.")
+
+    manual_openai_key = st.text_input(
+        "OpenAI API Key",
+        value=st.session_state.get("MANUAL_OPENAI_API_KEY", ""),
+        type="password",
+        help="Απαραίτητο για transcription και fallback ανάλυση/σύνθεση.",
+    )
+
+    manual_anthropic_key = st.text_input(
+        "Claude / Anthropic API Key",
+        value=st.session_state.get("MANUAL_ANTHROPIC_API_KEY", ""),
+        type="password",
+        help="Προαιρετικό. Αν υπάρχει, χρησιμοποιείται για καλύτερη σύνθεση πρακτικού.",
+    )
+
+    if manual_openai_key:
+        st.session_state["MANUAL_OPENAI_API_KEY"] = manual_openai_key.strip()
+
+    if manual_anthropic_key:
+        st.session_state["MANUAL_ANTHROPIC_API_KEY"] = manual_anthropic_key.strip()
+
+    if st.button("🧹 Clear manual API keys", use_container_width=True):
+        st.session_state.pop("MANUAL_OPENAI_API_KEY", None)
+        st.session_state.pop("MANUAL_ANTHROPIC_API_KEY", None)
+        st.rerun()
+
+    st.markdown("---")
+    show_api_status()
+
 
 meta = {
     "stoaa": stoaa,
@@ -757,6 +840,10 @@ meta = {
     "secretary": secretary,
 }
 
+
+# ══════════════════════════════════════════════════════════════
+# MAIN UI
+# ══════════════════════════════════════════════════════════════
 st.markdown("## 1️⃣ Upload Ηχογράφησης")
 uploaded = st.file_uploader(
     "Ανεβάστε ηχογράφηση",
@@ -788,9 +875,11 @@ if uploaded:
 
         st.success("✅ Η ενιαία μεταγραφή ολοκληρώθηκε.")
 
+
 if "page20_chunk_log" in st.session_state:
     with st.expander("🧩 Chunks που μεταγράφηκαν"):
         st.dataframe(st.session_state["page20_chunk_log"], use_container_width=True)
+
 
 if "page20_transcript" in st.session_state:
     st.markdown("---")
@@ -825,6 +914,7 @@ if "page20_transcript" in st.session_state:
             st.session_state.pop("page20_minutes", None)
             st.success("✅ Η δομημένη ανάλυση ολοκληρώθηκε.")
 
+
 if "page20_analysis" in st.session_state:
     st.markdown("---")
     analysis = st.session_state["page20_analysis"]
@@ -846,6 +936,7 @@ if "page20_analysis" in st.session_state:
         st.session_state["page20_minutes"] = minutes
         st.session_state["page20_model_used"] = model_used
         st.success(f"✅ Το πρακτικό δημιουργήθηκε με: {model_used}")
+
 
 if "page20_minutes" in st.session_state:
     st.markdown("---")
@@ -894,11 +985,13 @@ if "page20_minutes" in st.session_state:
             use_container_width=True,
         )
 
+
 st.markdown("---")
 with st.expander("ℹ️ Σημειώσεις λειτουργίας"):
     st.markdown(
         """
 - Η μεταγραφή γίνεται με **OpenAI**.
+- Αν το Streamlit δεν διαβάζει secrets, βάλε το OpenAI key χειροκίνητα στο sidebar.
 - Η τελική σύνθεση πρακτικού γίνεται με **Claude**, εφόσον υπάρχει `ANTHROPIC_API_KEY`.
 - Αν Claude δεν υπάρχει ή αποτύχει, γίνεται fallback σε **OpenAI**.
 - Για μεγάλα audio, το αρχείο κόβεται αυτόματα σε μικρότερα chunks και μετά η μεταγραφή ενώνεται σε ενιαίο κείμενο.
