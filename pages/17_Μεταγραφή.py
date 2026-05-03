@@ -210,37 +210,63 @@ _FONT_CACHE_DIR = "/tmp/grammateas_fonts"
 
 
 def ensure_fonts() -> str:
+    """
+    Εντοπίζει φάκελο με DejaVu TTF αρχεία.
+    Ελέγχει: system fonts → project fonts → /tmp (download).
+    """
     sentinel  = "DejaVuSans.ttf"
-    candidates = []
+    # System font directories (Ubuntu / Streamlit Cloud)
+    system_candidates = [
+        "/usr/share/fonts/truetype/dejavu",      # Ubuntu standard
+        "/usr/share/fonts/dejavu",
+        "/usr/share/fonts/TTF",
+        "/usr/local/share/fonts/dejavu",
+    ]
+    # Project/app directories
+    project_candidates = []
     try:
-        this_file  = os.path.abspath(__file__)
-        candidates.append(os.path.join(os.path.dirname(os.path.dirname(this_file)), "fonts"))
-        candidates.append(os.path.join(os.path.dirname(this_file), "fonts"))
+        this_file = os.path.abspath(__file__)
+        project_candidates += [
+            os.path.join(os.path.dirname(os.path.dirname(this_file)), "fonts"),
+            os.path.join(os.path.dirname(this_file), "fonts"),
+        ]
     except Exception:
         pass
-    candidates += [
+    project_candidates += [
         os.path.join(os.getcwd(), "fonts"),
         os.path.join(os.getcwd(), "..", "fonts"),
         "/mount/src/grammateas/fonts",
+        _FONT_CACHE_DIR,
     ]
-    for candidate in candidates:
+
+    all_candidates = system_candidates + project_candidates
+    for candidate in all_candidates:
         candidate = os.path.normpath(candidate)
         if os.path.isdir(candidate) and os.path.exists(os.path.join(candidate, sentinel)):
             return candidate
+
+    # Fallback: download to cache dir
     os.makedirs(_FONT_CACHE_DIR, exist_ok=True)
+    downloaded = False
     for filename, url in _FONT_URLS.items():
         dest = os.path.join(_FONT_CACHE_DIR, filename)
         if not os.path.exists(dest):
             try:
                 urllib.request.urlretrieve(url, dest)
+                downloaded = True
             except Exception:
                 pass
     return _FONT_CACHE_DIR
 
 
 def register_dejavu_fonts() -> Tuple[str, str, str, str]:
+    """
+    Καταχωρεί DejaVu fonts στο ReportLab.
+    Επιστρέφει (sans, sans-bold, serif, serif-bold) aliases.
+    """
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
+
     font_dir = ensure_fonts()
     font_map = {
         "DJVS":  "DejaVuSans.ttf",
@@ -249,6 +275,7 @@ def register_dejavu_fonts() -> Tuple[str, str, str, str]:
         "DJVRB": "DejaVuSerif-Bold.ttf",
         "DJVRI": "DejaVuSerif-Italic.ttf",
     }
+
     registered = set(pdfmetrics.getRegisteredFontNames())
     for alias, filename in font_map.items():
         if alias not in registered:
@@ -256,13 +283,24 @@ def register_dejavu_fonts() -> Tuple[str, str, str, str]:
             if os.path.exists(path):
                 try:
                     pdfmetrics.registerFont(TTFont(alias, path))
-                except Exception:
-                    pass
+                except Exception as _fe:
+                    pass  # silent fail → Helvetica fallback
+
     registered = set(pdfmetrics.getRegisteredFontNames())
     fs  = "DJVS"  if "DJVS"  in registered else "Helvetica"
     fsb = "DJVSB" if "DJVSB" in registered else "Helvetica-Bold"
     fr  = "DJVR"  if "DJVR"  in registered else "Helvetica"
     frb = "DJVRB" if "DJVRB" in registered else "Helvetica-Bold"
+
+    # Warn if falling back — Greek will not render correctly
+    if fs == "Helvetica":
+        import sys as _sys
+        print(
+            f"[PDF] ⚠️  DejaVu not found in {font_dir} — "
+            "Greek characters may not render. "
+            "Add fonts/ folder to the repo or install dejavu-fonts-ttf.",
+            file=_sys.stderr,
+        )
     return fs, fsb, fr, frb
 
 
@@ -716,6 +754,51 @@ _SYSTEM_PROMPT = f"""
 • Αιωνία Ανατολή, Κορμός Αγαθοεργίας, Τεκτ∴ Ναός
 • Σφύρα, πλήρωμα, χαρμόσυνη/πενθίμια χειροκρουσία
 
+════════════════════════════════════════════════════════════════
+ΑΦΗΓΗΜΑΤΙΚΗ ΡΟΗ — ΚΡΙΣΙΜΕΣ ΟΔΗΓΙΕΣ
+════════════════════════════════════════════════════════════════
+
+ΑΡΧΗ ΚΕΙΜΕΝΟΥ — ΠΑΝΤΑ ξεκίνα με:
+Γράψε ΕΝΑ εισαγωγικό εδάφιο που περιλαμβάνει:
+  α) Παρόντες: «Παρευρέθησαν [ΑΡΙΘΜΟΣ ΟΛΟΓΡΑΦΩΣ] ([ΑΡΙΘΜΟΣ]) Αδδ∴,
+     υπογράψαντες το Βιβλίον των Παρουσιών.»
+  β) Θέσεις απόντων: «Τις θέσεις των απόντων Αξιωματικών ανέλαβον:
+     [ΑΞΙΩΜΑ] ο [ΟΝΟΜΑ], [ΑΞΙΩΜΑ] ο [ΟΝΟΜΑ]...»
+  γ) Ανατολή: «Την Ανατολήν εκόσμουν ο [ΟΝΟΜΑ] και ο [ΟΝΟΜΑ].»
+
+Παράδειγμα σωστής εισαγωγής:
+---
+ΠΑΡΟΝΤΕΣ — ΘΕΣΕΙΣ ΑΞΙΩΜΑΤΙΚΩΝ
+Παρευρέθησαν δώδεκα (12) Αδδ∴, υπογράψαντες το Βιβλίον των Παρουσιών.
+Τις θέσεις των απόντων Αξιωματικών ανέλαβον: Ρήτωρ ο πρ∴ Σεβ∴ Θεόδωρος
+Κεσσανής, Α΄ Επόπτης ο πρ∴ Σεβ∴ Δημήτριος Γεωργακόπουλος, Δοκιμαστής Α΄
+ο Αδ∴ Χρήστος Ιατρόπουλος, Ταμίας ο πρ∴ Σεβ∴ Νικόλαος Κωνσταντίνου.
+Την Ανατολήν εκόσμουν ο πρ∴ Σεβ∴ Θεόδωρος Κεσσανής και ο Ένδοξος Αδ∴
+Μέγας Στεγαστής Δημήτριος Δενδεδιός.
+---
+
+ΜΕΙΩΣΗ ΕΠΑΝΑΛΗΨΕΩΝ «Ο Φιλτ∴ Αδ∴ Σεβ∴»:
+• Χρησιμοποίησε «Ο Φιλτ∴ Αδ∴ Σεβ∴» ΜΟΝΟ στην πρώτη αναφορά κάθε ενότητας.
+• Στη συνέχεια της ίδιας ενότητας χρησιμοποίησε: «Ο Σεβ∴», «Αυτός», «Στη συνέχεια»,
+  «Κατόπιν», «Ακολούθως ζήτησε», «Παράλληλα επισήμανε».
+• ΜΗΝ ξεκινάς κάθε πρόταση με «Ο Φιλτ∴ Αδ∴ Σεβ∴».
+• Χρησιμοποίησε ποικίλες συνδέσεις: «Στη ροή των εργασιών...»,
+  «Εν συνεχεία...», «Κατά τον ίδιο τρόπο...», «Με αυτό το πνεύμα...»
+
+Παράδειγμα ΣΩΣΤΗΣ ροής (χωρίς επαναλήψεις):
+---
+ΕΝΑΡΞΙΣ — ΚΑΛΩΣΟΡΙΣΜΑ
+Ο Φιλτ∴ Αδ∴ Σεβ∴ Γεώργιος Παρίσης εκήρυξε την έναρξη των Εργασιών, καλωσορίζοντας
+εγκάρδια όλους τους Αδδ∴ και ιδιαίτερα τον Ένδοξο Αδ∴ Μέγα Στεγαστή. Τόνισε
+τη χαρμόσυνη σημασία της ημέρας ενόψει της εγκατάστασης των νέων Αξιωματικών.
+---
+
+Παράδειγμα ΛΑΘΟΣ ροής (αποφύγετε):
+---
+Ο Φιλτ∴ Αδ∴ Σεβ∴ εκήρυξε την έναρξη. Ο Φιλτ∴ Αδ∴ Σεβ∴ καλωσόρισε τους Αδδ∴.
+Ο Φιλτ∴ Αδ∴ Σεβ∴ τόνισε τη χαρμόσυνη σημασία.
+---
+
 ΣΗΜΑΝΤΙΚΟ — ΠΟΙΟΣ ΕΙΝΑΙ Ο ΝΕΟΣ ΓΡΑΜΜΑΤΕΑΣ:
 • Αν γίνεται εγκατάσταση νέων αξιωματικών, ο "νέος Γραμματεύς" είναι αυτός
   που αναλαμβάνει καθήκοντα από σήμερα — ΟΧΙ ο απερχόμενος.
@@ -866,7 +949,16 @@ def format_into_praktiko(
 
     raw = ""
     try:
-        msg = client.messages.create(
+        # Streaming: εμφάνιση token-by-token στο UI
+        _stream_placeholder = None
+        try:
+            import streamlit as _st
+            _stream_placeholder = _st.empty()
+        except Exception:
+            pass
+
+        raw_parts: List[str] = []
+        with client.messages.stream(
             model=CLAUDE_MODEL,
             max_tokens=16000,
             system=_SYSTEM_PROMPT,
@@ -877,8 +969,17 @@ def format_into_praktiko(
                     f"{source_label}:\n{transcript}"
                 ),
             }],
-        )
-        raw = msg.content[0].text.strip() if msg.content else ""
+        ) as stream:
+            for text_chunk in stream.text_stream:
+                raw_parts.append(text_chunk)
+                if _stream_placeholder is not None:
+                    # Εμφάνιση live progress — πόσοι χαρακτήρες έχουν γραφτεί
+                    _stream_placeholder.caption(
+                        f"✍️ Σύνταξη πρακτικού… {sum(len(p) for p in raw_parts):,} χαρακτήρες"
+                    )
+        if _stream_placeholder is not None:
+            _stream_placeholder.empty()
+        raw = "".join(raw_parts).strip()
 
         # ── DEBUG: εμφάνιση αρχής απάντησης αν χρειαστεί ──────
         if not raw:
@@ -989,7 +1090,65 @@ def process_docx_to_praktiko(
 
 
 # ══════════════════════════════════════════════════════════════
-# PDF GENERATOR
+# ΕΙΚΟΝΕΣ PDF — διαδρομές
+# ══════════════════════════════════════════════════════════════
+_PDF_IMG_MASONIC  = "/tmp/masonic.jpg"
+_PDF_IMG_ACROPOLIS = "/tmp/acropolis.jpg"
+
+# Fallback: αν τα αρχεία δεν υπάρχουν στο /tmp, ψάχνουμε δίπλα στο script
+def _find_pdf_image(tmp_path: str, filename: str) -> Optional[str]:
+    import os as _os
+    if _os.path.exists(tmp_path):
+        return tmp_path
+    candidates = [
+        _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), filename),
+        _os.path.join(_os.getcwd(), filename),
+        _os.path.join("/mount/src/grammateas/assets", filename),
+    ]
+    for c in candidates:
+        if _os.path.exists(c):
+            return c
+    return None
+
+
+# ══════════════════════════════════════════════════════════════
+# ΠΡΟΕΤΟΙΜΑΣΙΑ ΕΙΚΟΝΩΝ ΣΤΟ /tmp ΚΑΙ ΓΙΑ STREAMLIT CLOUD
+# ══════════════════════════════════════════════════════════════
+def _ensure_pdf_images():
+    """
+    Αντιγράφει τις εικόνες στο /tmp αν βρεθούν στους γνωστούς φακέλους.
+    Καλείται μία φορά κατά την εκκίνηση.
+    """
+    import shutil as _sh
+    _lookup = {
+        _PDF_IMG_MASONIC: [
+            "/mount/src/grammateas/assets/masonic.jpg",
+            "/mount/src/grammateas/static/masonic.jpg",
+            os.path.join(os.getcwd(), "assets", "masonic.jpg"),
+            os.path.join(os.getcwd(), "masonic.jpg"),
+        ],
+        _PDF_IMG_ACROPOLIS: [
+            "/mount/src/grammateas/assets/acropolis.jpg",
+            "/mount/src/grammateas/static/acropolis.jpg",
+            os.path.join(os.getcwd(), "assets", "acropolis.jpg"),
+            os.path.join(os.getcwd(), "acropolis.jpg"),
+        ],
+    }
+    for dest, sources in _lookup.items():
+        if not os.path.exists(dest):
+            for src_path in sources:
+                if os.path.exists(src_path):
+                    try:
+                        _sh.copy2(src_path, dest)
+                        break
+                    except Exception:
+                        pass
+
+_ensure_pdf_images()
+
+
+# ══════════════════════════════════════════════════════════════
+# PDF GENERATOR — αφηγηματική μορφή με εικόνες
 # ══════════════════════════════════════════════════════════════
 def generate_praktiko_pdf(d: dict) -> io.BytesIO:
     from reportlab.lib.pagesizes import A4
@@ -997,109 +1156,191 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
     from reportlab.lib import colors
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY, TA_RIGHT
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table,
+        Image as RLImage, KeepTogether,
+    )
 
+    # ── Γραμματοσειρές DejaVu (υποστηρίζουν ∴) ──────────────
     fs, fsb, fr, frb = register_dejavu_fonts()
     cnvy  = colors.HexColor(NAVY)
     cgold = colors.HexColor(GOLD)
+    cgrey = colors.HexColor("#888888")
 
+    # ── Στυλ ─────────────────────────────────────────────────
     def S(name, **kw):
         return ParagraphStyle(name, **kw)
 
-    H1   = S("H1",   fontName=fsb, fontSize=12, alignment=TA_CENTER, spaceAfter=2,  leading=15)
-    H2   = S("H2",   fontName=fs,  fontSize=10, alignment=TA_CENTER, spaceAfter=2,  leading=13)
-    LDG  = S("LDG",  fontName=fsb, fontSize=10, alignment=TA_CENTER, spaceAfter=6,  leading=13)
-    TTL  = S("TTL",  fontName=fsb, fontSize=11, alignment=TA_CENTER, spaceAfter=2,  spaceBefore=6, leading=15, textColor=cnvy)
-    HDA  = S("HDA",  fontName=fsb, fontSize=10, alignment=TA_LEFT,   spaceAfter=4,  leading=13)
-    BUL  = S("BUL",  fontName=fr,  fontSize=10, alignment=TA_LEFT,   leftIndent=20, spaceAfter=3,  leading=14)
-    BOD  = S("BOD",  fontName=fr,  fontSize=10, alignment=TA_JUSTIFY, spaceAfter=6, leading=15)
-    SML  = S("SML",  fontName=fr,  fontSize=8,  alignment=TA_CENTER, textColor=colors.grey, spaceAfter=2)
-    SGN  = S("SGN",  fontName=fr,  fontSize=10, alignment=TA_CENTER, spaceAfter=0,  leading=14)
-    SGNB = S("SGNB", fontName=frb, fontSize=10, alignment=TA_CENTER, spaceAfter=0,  leading=14)
-    IPO  = S("IPO",  fontName=fr,  fontSize=10, alignment=TA_RIGHT,  spaceAfter=4)
+    H1   = S("H1",   fontName=fsb, fontSize=11, alignment=TA_CENTER, spaceAfter=1,  leading=14, textColor=cnvy)
+    H2   = S("H2",   fontName=fs,  fontSize=9,  alignment=TA_CENTER, spaceAfter=1,  leading=12, textColor=cnvy)
+    LDG  = S("LDG",  fontName=fsb, fontSize=10, alignment=TA_CENTER, spaceAfter=4,  leading=13)
+    TTL  = S("TTL",  fontName=fsb, fontSize=13, alignment=TA_CENTER, spaceAfter=4,  spaceBefore=4,
+             leading=17, textColor=cnvy)
+    # Τίτλοι ενοτήτων — bold, navy, μικρό κενό πριν
+    SEC  = S("SEC",  fontName=fsb, fontSize=10, alignment=TA_LEFT, spaceAfter=4, spaceBefore=10,
+             leading=13, textColor=cnvy)
+    # Κύριο κείμενο — justify, serif, 10.5pt
+    BOD  = S("BOD",  fontName=fr,  fontSize=10.5, alignment=TA_JUSTIFY, spaceAfter=7, leading=16)
+    # Λίστα ομιλητών
+    BUL  = S("BUL",  fontName=fr,  fontSize=9.5, alignment=TA_LEFT, leftIndent=14, spaceAfter=3, leading=14)
+    # Footer
+    SML  = S("SML",  fontName=fs,  fontSize=7.5, alignment=TA_CENTER, textColor=cgrey, spaceAfter=2)
+    # Υπογραφές
+    SGN  = S("SGN",  fontName=fr,  fontSize=10, alignment=TA_CENTER, spaceAfter=0, leading=14)
+    SGNB = S("SGNB", fontName=fsb, fontSize=10, alignment=TA_CENTER, spaceAfter=0, leading=14)
+    IPO  = S("IPO",  fontName=fr,  fontSize=10, alignment=TA_RIGHT, spaceAfter=4, textColor=cnvy)
 
     def xe(t):
         return str(t or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
     βαθμ = d.get("βαθμός_γενική", "Μαθητού") or "Μαθητού"
     ημερ = d.get("ημερομηνία", "") or ""
+    σεβ  = d.get("σεβάσμιος", "") or ""
+    γραμ = d.get("γραμματεύς", "") or ""
+    ρητ  = d.get("ρήτωρ", "") or ""
 
-    story = [
+    story: list = []
+
+    # ══ HEADER: σύμβολο + τίτλος Σ∴ Στ∴ ════════════════════
+    masonic_path = _find_pdf_image(_PDF_IMG_MASONIC, "masonic.jpg")
+    if masonic_path:
+        try:
+            logo = RLImage(masonic_path, width=2.2*cm, height=2.2*cm)
+            logo.hAlign = "CENTER"
+            story.append(logo)
+            story.append(Spacer(1, 0.2*cm))
+        except Exception:
+            pass
+
+    story += [
         Paragraph("Ε∴Δ∴Τ∴Μ∴Α∴Τ∴Σ∴", H1),
-        Spacer(1, 0.15 * cm),
         Paragraph("Εν Ονόματι και Υπό την Αιγίδα", H2),
         Paragraph("της Μεγάλης Στοάς της Ελλάδος", H2),
         Paragraph("των Αρχαίων Ελευθέρων και Αποδεδεγμένων Τεκτόνων", H2),
-        Spacer(1, 0.1 * cm),
-        Paragraph("Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ υπ' αρ. 84       εν Αν∴Αθ∴", LDG),
-        HRFlowable(width="100%", thickness=1.5, color=cnvy, spaceAfter=8),
-        Paragraph(f"Πρακτικόν Συνεδρίας της {xe(ημερ)} εις Βαθμ∴ {xe(βαθμ[:3])}∴", TTL),
+        Spacer(1, 0.1*cm),
+        Paragraph("Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ υπ' αρ. 84 · εν Αν∴ Αθ∴", LDG),
+        HRFlowable(width="100%", thickness=1.5, color=cnvy, spaceAfter=6),
+        Paragraph(
+            f"Πρακτικόν Συνεδρίας της <b>{xe(ημερ)}</b> εις Βαθμ∴ {xe(βαθμ[:3])}∴",
+            TTL
+        ),
+        HRFlowable(width="100%", thickness=0.5, color=cgold, spaceAfter=8),
     ]
 
-    agenda = d.get("ημερησία_διάταξη", []) or []
-    if agenda:
-        story += [Spacer(1, 0.2 * cm), Paragraph("<b>Ημερησία Διάταξις:</b>", HDA)]
-        for item in agenda:
-            story.append(Paragraph(f"– {xe(item)}", BUL))
-        story.append(Spacer(1, 0.15 * cm))
+    # ══ ΦΩΤΟΓΡΑΦΙΑ ΑΚΡΟΠΟΛΗΣ (πλάτος σελίδας) ═══════════════
+    acropolis_path = _find_pdf_image(_PDF_IMG_ACROPOLIS, "acropolis.jpg")
+    if acropolis_path:
+        try:
+            # Σελίδα: 21cm - 2*2.5cm margins = 16cm usable
+            acro = RLImage(acropolis_path, width=16*cm, height=5*cm)
+            acro.hAlign = "CENTER"
+            story.append(acro)
+            story.append(Paragraph(
+                "Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ υπ' αρ. 84 · Αθήναι",
+                S("CAP", fontName=fs, fontSize=7.5, alignment=TA_CENTER,
+                  textColor=cgrey, spaceAfter=8, leading=10)
+            ))
+        except Exception:
+            pass
 
-    story.append(HRFlowable(width="100%", thickness=0.5, color=cgold, spaceAfter=10))
+    story.append(Spacer(1, 0.3*cm))
 
-    xairetismoi = d.get("χαιρετισμοί_κατά_σειράν", []) or []
-    if xairetismoi:
-        story += [Paragraph("<b>Χαιρετισμοί κατά πρωτόκολλον (Εγκ. 27/2019):</b>", HDA)]
-        for item in xairetismoi:
-            story.append(Paragraph(f"– {xe(item)}", BUL))
-        story.append(Spacer(1, 0.15 * cm))
-
+    # ══ ΚΥΡΙΟ ΚΕΙΜΕΝΟ — αφηγηματική ροή ═════════════════════
     body = d.get("κείμενο_πρακτικών", "") or ""
-    for para in body.split("\n\n"):
-        para = para.strip()
-        if not para:
-            continue
+
+    # Αν το κείμενο δεν ξεκινά με ΠΑΡΟΝΤΕΣ, προσθέτουμε αυτόματα
+    # τα στοιχεία παρόντων από τα JSON πεδία
+    παρ_αρ  = d.get("παρόντες_αριθμός", 0) or 0
+    παρ_ολ  = d.get("παρόντες_ολογράφως", "") or ""
+    if παρ_ολ and "ΠΑΡΟΝΤΕΣ" not in body[:200].upper():
+        intro_lines = [
+            f"Παρευρέθησαν <b>{xe(παρ_ολ)} ({παρ_αρ})</b> Αδδ∴, "
+            "υπογράψαντες το Βιβλίον των Παρουσιών."
+        ]
+        # Προσθήκη εισαγωγικής παραγράφου ΠΡΙΝ το κυρίως κείμενο
+        story += [
+            Paragraph("<b>ΠΑΡΟΝΤΕΣ — ΘΕΣΕΙΣ ΑΞΙΩΜΑΤΙΚΩΝ</b>", SEC),
+            Paragraph(" ".join(intro_lines), BOD),
+            Spacer(1, 0.1*cm),
+        ]
+
+    # Θέση εισαγωγής εικόνας ∴ μέσα στο κείμενο
+    # (μετά την 1η ενότητα ΕΝΑΡΞΙΣ, αν υπάρχει)
+    masonic_inserted = False
+
+    paragraphs = [p.strip() for p in body.split("\n\n") if p.strip()]
+    for idx, para in enumerate(paragraphs):
         lines = [l.strip() for l in para.split("\n") if l.strip()]
         if not lines:
             continue
-        # Detect section header: ALL CAPS line, possibly with — separator, no dot at end
-        first_line = lines[0]
-        is_section_header = (
-            len(lines) == 1
-            and first_line == first_line.upper()
-            and len(first_line) < 80
-            and not first_line.endswith(".")
-        ) or (
-            first_line == first_line.upper()
-            and "—" in first_line
-            and len(first_line) < 80
-        )
-        if is_section_header:
-            story += [Spacer(1, 0.25 * cm)]
-            story.append(Paragraph(f"<b>{xe(first_line)}</b>", HDA))
-            # Remaining lines as body
-            rest = "\n".join(lines[1:]).strip()
-            if rest:
-                story.append(Paragraph(xe(rest.replace("\n", " ")), BOD))
-        elif all(l[:1] in ("-", "–", "•", "*") for l in lines):
-            for ln in lines:
-                story.append(Paragraph(xe(ln), BUL))
-        else:
-            story.append(Paragraph(xe(para.replace("\n", " ")), BOD))
 
+        first_line = lines[0]
+        # Detect section header: ALL CAPS, < 80 chars, δεν τελειώνει με .
+        is_header = (
+            first_line == first_line.upper()
+            and len(first_line) < 90
+            and not first_line.endswith(".")
+            and any(c.isalpha() for c in first_line)
+        )
+
+        if is_header:
+            header_text = xe(first_line)
+            rest_lines  = lines[1:]
+
+            # Ενσωματώνουμε το μασονικό σύμβολο δίπλα στον τίτλο ΟΜΙΛΙΑ
+            if (not masonic_inserted
+                    and masonic_path
+                    and "ΟΜΙΛΙΑ" in first_line):
+                masonic_inserted = True
+                try:
+                    sym = RLImage(masonic_path, width=1.4*cm, height=1.4*cm)
+                    sym_cell = [sym]
+                    hdr_cell = [Paragraph(f"<b>{header_text}</b>", SEC)]
+                    tbl = Table(
+                        [[hdr_cell, sym_cell]],
+                        colWidths=[13.5*cm, 1.5*cm],
+                        hAlign="LEFT",
+                    )
+                    story.append(tbl)
+                except Exception:
+                    story.append(Paragraph(f"<b>{header_text}</b>", SEC))
+            else:
+                story.append(Paragraph(f"<b>{header_text}</b>", SEC))
+
+            # Υπόλοιπο κείμενο της ίδιας παραγράφου
+            if rest_lines:
+                story.append(Paragraph(xe(" ".join(rest_lines)), BOD))
+        else:
+            # Κανονική παράγραφος — bullet ή αφηγηματική
+            if all(l[:1] in ("-", "–", "•", "*") for l in lines):
+                for ln in lines:
+                    story.append(Paragraph(xe(ln), BUL))
+            else:
+                story.append(Paragraph(xe(para.replace("\n", " ")), BOD))
+
+    # ══ ΟΜΙΛΗΤΕΣ (compact λίστα) ═════════════════════════════
     omilites = d.get("ομιλητές_κατά_σειράν", []) or []
     if omilites:
-        story += [Spacer(1, 0.1 * cm), Paragraph("<b>Έλαβον τον λόγον:</b>", HDA)]
+        story += [
+            Spacer(1, 0.2*cm),
+            HRFlowable(width="100%", thickness=0.3, color=cgold, spaceAfter=6),
+            Paragraph("<b>Έλαβον τον λόγον:</b>", SEC),
+        ]
         for item in omilites:
             story.append(Paragraph(f"– {xe(item)}", BUL))
-        story.append(Spacer(1, 0.15 * cm))
+        story.append(Spacer(1, 0.1*cm))
 
+    # ══ ΚΟΡΜΟΣ ΑΓΑΘΟΕΡΓΙΑΣ ═══════════════════════════════════
     κορμ = float(d.get("κορμός_αγαθοεργίας", 0) or 0)
     κολ  = d.get("κορμός_ολογράφως", "") or ""
     if κορμ:
         story.append(Paragraph(
-            f"Εκ του Κορμού της Αγαθοεργίας εβλάστησαν <b>{xe(κολ)} ({κορμ:.2f})</b> όστρακα.",
-            BOD))
+            f"Ο Κορμός της Αγαθοεργίας εβλάστησεν "
+            f"<b>{xe(κολ)} ({κορμ:.2f})</b> όστρακα.",
+            BOD
+        ))
 
-    σεβ = d.get("σεβάσμιος", "") or ""
+    # ══ ΚΛΕΙΣΙΜΟ ═════════════════════════════════════════════
     if σεβ:
         closing_1 = (
             f"Μη υπάρχοντος ετέρου θέματος, αι Εργασίαι έκλεισαν κανονικώς υπό την "
@@ -1116,37 +1357,54 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
         "απήλθον εν ειρήνη διά το Ποτήριον της Αγάπης."
     )
     story += [
-        Spacer(1, 0.3 * cm), Paragraph(closing_1, BOD),
-        Spacer(1, 0.1 * cm), Paragraph(closing_2, BOD),
-        Spacer(1, 0.2 * cm), Paragraph("Είπον Σεβ∴ Διδ∴.", IPO),
-        Spacer(1, 1.5 * cm),
+        Spacer(1, 0.35*cm),
+        Paragraph(closing_1, BOD),
+        Spacer(1, 0.1*cm),
+        Paragraph(closing_2, BOD),
+        Spacer(1, 0.25*cm),
+        Paragraph("Είπον Σεβ∴ Διδ∴.", IPO),
+        Spacer(1, 0.4*cm),
+        HRFlowable(width="100%", thickness=0.5, color=cnvy, spaceAfter=14),
     ]
 
-    γραμ = d.get("γραμματεύς", "") or ""
-    ρητ  = d.get("ρήτωρ", "") or ""
-
+    # ══ ΥΠΟΓΡΑΦΕΣ ════════════════════════════════════════════
     def sig_col(title, name):
-        return [Paragraph(title, SGN), Spacer(1, 1.2 * cm), Paragraph(xe(name), SGNB)]
+        return [
+            Paragraph(title, SGN),
+            Spacer(1, 1.0*cm),
+            Paragraph(xe(name), SGNB),
+        ]
 
-    story.append(Table([[sig_col("Ο Σεβ∴ Διδ∴", σεβ)]], colWidths=[14 * cm], hAlign="CENTER"))
-    story.append(Spacer(1, 0.8 * cm))
-    story.append(Table(
-        [[sig_col("Ο Γραμματεύς", γραμ), sig_col("Ο Ρήτωρ", ρητ)]],
-        colWidths=[7 * cm, 7 * cm], hAlign="CENTER",
-    ))
+    story.append(
+        Table([[sig_col("Ο Σεβ∴ Διδ∴", σεβ)]],
+              colWidths=[14*cm], hAlign="CENTER")
+    )
+    story.append(Spacer(1, 0.7*cm))
+    story.append(
+        Table(
+            [[sig_col("Ο Γραμματεύς", γραμ), sig_col("Ο Ρήτωρ", ρητ)]],
+            colWidths=[7*cm, 7*cm], hAlign="CENTER",
+        )
+    )
+
+    # ══ FOOTER ════════════════════════════════════════════════
     story += [
-        Spacer(1, 0.6 * cm),
+        Spacer(1, 0.6*cm),
         HRFlowable(width="100%", thickness=0.3, color=colors.lightgrey),
         Paragraph(
-            f"Αρ. Πρωτ.: {xe(d.get('αρ_πρωτ', ''))} | Ημερομηνία: {xe(ημερ)} | Βαθμ∴: {xe(βαθμ)}",
-            SML),
+            f"Αρ. Πρωτ.: {xe(d.get('αρ_πρωτ', ''))} · "
+            f"Ημερομηνία: {xe(ημερ)} · Βαθμ∴: {xe(βαθμ)}",
+            SML
+        ),
     ]
 
     buf = io.BytesIO()
-    SimpleDocTemplate(buf, pagesize=A4,
-                      rightMargin=2.5*cm, leftMargin=2.5*cm,
-                      topMargin=2*cm, bottomMargin=2*cm,
-                      title="Πρακτικό Συνεδρίασης ΑΚΡΟΠΟΛΙΣ 84").build(story)
+    SimpleDocTemplate(
+        buf, pagesize=A4,
+        rightMargin=2.5*cm, leftMargin=2.5*cm,
+        topMargin=1.8*cm, bottomMargin=1.8*cm,
+        title=f"Πρακτικό Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ 84 — {ημερ}",
+    ).build(story)
     buf.seek(0)
     return buf
 
