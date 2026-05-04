@@ -3,14 +3,16 @@
 Σελίδα 21 — Ενημέρωση Παρουσίας
 Ενημέρωση Παρουσίας — ΑΚΡΟΠΟΛΙΣ ΥΠ. ΑΡΙΘΜ. 84
 """
-import sys; sys.path.append("..")
+import sys, os; sys.path.append("..")
 import sqlite3
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
-DB_PATH = "grammateas.db"
+# Absolute path so it works on Streamlit Cloud too
+_HERE = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(os.path.dirname(_HERE), "grammateas.db")
 LODGE_NAME = "ΑΚΡΟΠΟΛΙΣ ΥΠ. ΑΡΙΘΜ. 84"
 
 st.set_page_config(
@@ -616,20 +618,26 @@ with tab_sessions:
         submit_session = st.form_submit_button("💾 Αποθήκευση Συνεδρίασης", type="primary", use_container_width=True)
         if submit_session:
             if not f_τίτλος:
-                st.error("Εισάγετε τίτλο.")
+                st.error("❌ Εισάγετε τίτλο συνεδρίασης.")
             else:
-                save_edtmats_session({
-                    "τίτλος": f_τίτλος,
-                    "ημερομηνία": f_ημερομηνία.isoformat(),
-                    "ώρα": f_ώρα,
-                    "κεφάλαιο": f_κεφάλαιο,
-                    "διδάσκαλος": f_διδάσκαλος,
-                    "ομιλητής": f_ομιλητής,
-                    "τίτλος_ομιλίας": f_τίτλος_ομιλίας,
-                    "ενεργή": int(f_ενεργή),
-                })
-                st.success("✅ Η συνεδρίαση αποθηκεύτηκε!")
-                st.rerun()
+                try:
+                    save_edtmats_session({
+                        "τίτλος": f_τίτλος,
+                        "ημερομηνία": f_ημερομηνία.isoformat(),
+                        "ώρα": f_ώρα,
+                        "κεφάλαιο": f_κεφάλαιο,
+                        "διδάσκαλος": f_διδάσκαλος,
+                        "ομιλητής": f_ομιλητής,
+                        "τίτλος_ομιλίας": f_τίτλος_ομιλίας,
+                        "ενεργή": int(f_ενεργή),
+                    })
+                    st.session_state["session_saved"] = f_τίτλος
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Σφάλμα αποθήκευσης: {e}")
+
+    if st.session_state.get("session_saved"):
+        st.success(f"✅ Η συνεδρίαση «{st.session_state.pop('session_saved')}» αποθηκεύτηκε!")
 
     st.markdown("---")
     st.markdown("### 📋 Καταχωρημένες Συνεδριάσεις")
