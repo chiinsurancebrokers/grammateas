@@ -317,7 +317,7 @@ def create_invitation(meeting_date, meeting_time, degree, venue,
         else:
             draw_wreath_symbol(draw, bullet_x, y+10, 16)
         draw = ImageDraw.Draw(img)
-        y = left(draw, text_x, y, to_upper_gr(item), f_agenda, NAVY, max_w=TEXT_W-80, lsp=4)
+        y = left(draw, text_x, y, item.upper(), f_agenda, NAVY, max_w=TEXT_W-80, lsp=4)
         y += 10
 
     y += 14
@@ -342,13 +342,32 @@ def create_invitation(meeting_date, meeting_time, degree, venue,
     y = center(draw, y, "Μετά το πέρας των Εργασιών θα ακολουθήσει Ποτήριον Αγάπης.", f_small, NAVY, max_w=TEXT_W, lsp=10)
     y = center(draw, y, "Με τον τριπλό αδελφικό ασπασμό,", f_small, NAVY, lsp=28)
 
-    # Ονόματα — χωρίς γραμμές, χωρίς σφραγίδα
-    sig_lx = INNER_X+170; sig_rx = PAGE_W-INNER_X-170
+    # ── Υπογραφές: τίτλος + σύμβολο κέντρου + ονόματα ──────────
+    sig_y  = y
+    sig_lx = INNER_X + 170
+    sig_rx = PAGE_W - INNER_X - 170
+    f_sig_label = font(19)
+    f_sig_name  = font(17, bold=True)
+
+    # Τίτλοι
+    center_at(draw, sig_lx, sig_y, "Ο Σεβάσμιος",                    f_sig_label, NAVY)
+    center_at(draw, sig_rx, sig_y, "Ο Γραμματεύς",   f_sig_label, NAVY)
+
+    # Κεντρικό σύμβολο (symbol_center = δαφνινό στεφάνι + μασονικό)
+    sym_w, sym_h = 160, 130
+    sym_x = (PAGE_W - sym_w) // 2
+    sym_y = sig_y - 10
+    if not paste_asset(img, symbol_center_bytes, sym_x, sym_y, sym_w, sym_h, opacity=0.95):
+        draw_wreath_symbol(draw, PAGE_W // 2, sig_y + 40, 36)
+    draw = ImageDraw.Draw(img)
+
+    # Ονόματα — κεφαλαία χωρίς τόνους (.upper() αφαιρεί τόνους φυσικά)
+    name_y = sig_y + 52
     if master.strip():
-        center_at(draw, sig_lx, y, to_upper_gr(master.strip()), f_sig, NAVY)
+        center_at(draw, sig_lx, name_y, master.strip().upper(), f_sig_name, NAVY)
     if secretary.strip():
-        center_at(draw, sig_rx, y, to_upper_gr(secretary.strip()), f_sig, NAVY)
-    y += 48
+        center_at(draw, sig_rx, name_y, secretary.strip().upper(), f_sig_name, NAVY)
+    y = name_y + 36
 
     # Επόμενες Συνεδρίες
     box_x1 = INNER_X-18; box_x2 = PAGE_W-INNER_X+18
