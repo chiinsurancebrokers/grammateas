@@ -1065,12 +1065,13 @@ def _find_masonic_image() -> Optional[str]:
 
 def masonic_image_flowable(width_cm: float = 2.4, height_cm: float = None):
     """Επιστρέφει ReportLab Image του γνώμονα & διαβήτη ή fallback Spacer."""
-    from reportlab.platypus import Image as _RLImg
+    from reportlab.lib.units import cm as _cm
+    from reportlab.platypus import Image as _RLImg, Spacer as _Sp
     path = _find_masonic_image()
     if not path:
-        return Spacer(1, 0.1 * cm)
-    w = width_cm * cm
-    h = (height_cm * cm) if height_cm else w * (330 / 283)
+        return _Sp(1, 0.1 * _cm)
+    w = width_cm * _cm
+    h = (height_cm * _cm) if height_cm else w * (330 / 283)
     img = _RLImg(path, width=w, height=h)
     img.hAlign = "CENTER"
     return img
