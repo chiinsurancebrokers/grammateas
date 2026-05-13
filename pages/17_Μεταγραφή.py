@@ -9,6 +9,7 @@ sys.path.append("..")
 
 import io
 import json
+import math
 import os
 import re
 import urllib.request
@@ -212,7 +213,7 @@ TAXH_OMILION: List[Dict[str, Any]] = [
     {"order": 8,  "title": "Ομότιμοι Κοσμήτορες (Αριστερά Σεβ.)",
      "keywords": [r"ομότιμ.{0,4}κοσμ"]},
     {"order": 9,  "title": "Κοσμήτορες (Δεξιά Σεβ.)",
-     "keywords": [r"κοσμήτορ"]},  # Ομότιμοι ήδη πιάστηκαν από entry 8
+     "keywords": [r"κοσμήτορ"]},
     {"order": 10, "title": "Μέγας Επιθεωρητής (Δεξιά Σεβ.)",
      "keywords": [r"μεγ.{0,4}επιθεωρητ", r"μέγ.{0,4}επιθ"]},
     {"order": 11, "title": "Πρόσθετοι Μεγ. Αξιωματικοί (Δεξιά Σεβ.)",
@@ -226,7 +227,7 @@ TAXH_OMILION: List[Dict[str, Any]] = [
      "keywords": [r"μεγ.{0,4}αξιωμ", r"ένδοξ.{0,4}αδ.{0,4}μεγ.{0,4}αξ"]},
     {"order": 15, "title": "Πρόσθετος Μέγ. Διδάσκαλος (Δεξιά Σεβ.)",
      "keywords": [r"πρόσθετ.{0,4}μεγ.{0,4}διδ"]},
-    {"order": 16, "title": "Πρώην Μεγ. Διδάσκαλοι (Αριστερά Σεβ.)",
+    {"order": 16, "title": "Πρώην Μέγ. Διδάσκαλοι (Αριστερά Σεβ.)",
      "keywords": [r"πρώην.{0,4}μεγ.{0,4}διδ", r"πρ.{0,4}μεγ.{0,4}διδ",
                   r"ενδοξότατ.{0,4}αδ.{0,8}πρ.{0,4}μεγ.{0,4}διδ"]},
     {"order": 17, "title": "Επίτιμοι Μεγ. Διδάσκαλοι (Αριστερά Σεβ.)",
@@ -641,7 +642,6 @@ def sort_officials_by_protocol(officials: List[str]) -> List[str]:
 
 # ══════════════════════════════════════════════════════════════
 # ΤΑΞΙΝΟΜΗΣΗ ΣΕΙΡΑΣ ΛΗΨΗΣ ΛΟΓΟΥ (ΕΠΙ ΟΜΙΛΙΩΝ / ΕΥΗΜΕΡΙΑΣ)
-# Από κατώτερο → ανώτερο βαθμό
 # ══════════════════════════════════════════════════════════════
 def _omilion_rank(speaker_line: str) -> int:
     text = speaker_line.lower()
@@ -649,11 +649,10 @@ def _omilion_rank(speaker_line: str) -> int:
         for kw in entry["keywords"]:
             if re.search(kw, text, flags=re.IGNORECASE):
                 return entry["order"]
-    return 50  # άγνωστος → μέση θέση
+    return 50
 
 
 def sort_speakers_by_omilion(speakers: List[str]) -> List[str]:
-    """Ταξινομεί τους ομιλητές από κατώτερο → ανώτερο (σειρά λήψης λόγου)."""
     return sorted(speakers, key=_omilion_rank)
 
 
@@ -664,6 +663,18 @@ _SYSTEM_PROMPT = f"""
 Είσαι έμπειρος Γραμματεύς-Σφραγιδοφύλαξ της Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ υπ' αρ. 84.
 Σου δίνεται κείμενο ελληνικής τεκτονικής συνεδρίασης και πρέπει να συντάξεις
 επίσημα Πρακτικά ΜΣΤΕ.
+
+════════════════════════════════════════════════════════════════
+ΓΕΝΙΚΟΣ ΚΑΝΟΝΙΣΜΟΣ — ΥΠΟΧΡΕΩΤΙΚΟ ΠΕΡΙΕΧΟΜΕΝΟ ΠΡΑΚΤΙΚΩΝ
+════════════════════════════════════════════════════════════════
+
+Σύμφωνα με τον Γενικό Κανονισμό, ο Γραμματεύς-Σφραγιδοφύλαξ μνημονεύει
+υποχρεωτικά στα Πρακτικά:
+• Τον αριθμό των παρόντων μελών σε κάθε Συνεδρίαση της Στοάς.
+• Το όνομα παντός αναπληρούντος απόντα Αξιωματικού.
+• Πάσαν την αναγιγνωσκομένην αλληλογραφίαν.
+• Πάσαν γενομένην εις την Στοάν ομιλίαν και συζήτησιν εν περιλήψει.
+• Τα ονόματα των, κατόπιν αποφάσεως της Στοάς, δικαιολογηθέντων.
 
 ════════════════════════════════════════════════════════════════
 ΓΛΩΣΣΑ — ΚΡΙΣΙΜΗ ΟΔΗΓΙΑ
@@ -685,8 +696,7 @@ _SYSTEM_PROMPT = f"""
 • Χρησιμοποίησε «ο Σεβ∴» (όχι «ο Φιλτ∴ Αδ∴ Σεβ∴» σε κάθε πρόταση —
   μόνο στην πρώτη αναφορά κάθε ενότητας).
 
-ΤΕΚΤΟΝΙΚΕΣ ΦΡΑΣΕΙΣ ΠΟΥ ΔΙΑΤΗΡΟΥΝΤΑΙ ΑΝΑΛΛΟΙΩΤΕΣ (ΟΧΙ αρχαϊσμοί,
-αλλά καθιερωμένες εκφράσεις — μην τις αλλάζεις):
+ΤΕΚΤΟΝΙΚΕΣ ΦΡΑΣΕΙΣ ΠΟΥ ΔΙΑΤΗΡΟΥΝΤΑΙ ΑΝΑΛΛΟΙΩΤΕΣ:
 • «ως εχαράχθησαν» (μόνο για επικύρωση πρακτικών)
 • «εις Αιωνίαν Ανατολήν» (για μεταστάντα μέλη)
 • «τιμής ένεκεν» (για χειροκρουσία εις μνήμην)
@@ -697,15 +707,6 @@ _SYSTEM_PROMPT = f"""
 • «Εργαστήριο», «πλήρωμα», «Κορμός Αγαθοεργίας»
 • «Φιλτ∴ Αδ∴ Σεβ∴ Διδ∴», «Αδ∴», «Αδδ∴», «Σ∴ Στ∴»
 • «Αιωνία Ανατολή», «Τεκτ∴ Ναός»
-
-ΠΑΡΑΔΕΙΓΜΑ ΣΩΣΤΟΥ ΥΦΟΥΣ:
----
-Ο Φιλτ∴ Αδ∴ Σεβ∴ Γεώργιος Παρίσης άνοιξε τις εργασίες της Σ∴ Στ∴
-ΑΚΡΟΠΟΛΙΣ υπ' αρ. 84 σε Βαθμ∴ Μαθητού, καλωσορίζοντας εγκάρδια
-όλους τους Αδδ∴ και ιδιαίτερα τον Ένδοξο Αδ∴ Μέγα Στεγαστή.
-Τόνισε τη χαρά της σημερινής συνεδρίασης, ενόψει της εγκατάστασης
-των νέων Αξιωματικών.
----
 
 ════════════════════════════════════════════════════════════════
 ΠΡΩΤΟΚΟΛΛΟ ΤΑΞΗΣ ΠΡΟΣΦΩΝΗΣΕΩΝ (Εγκ. 27/2019 — Πίνακας Α)
@@ -731,56 +732,28 @@ _SYSTEM_PROMPT = f"""
 
 {OMILION_TEXT}
 
-ΚΡΙΣΙΜΟ για τις ενότητες «ΕΠΙ ΤΗΣ ΟΜΙΛΙΑΣ» και «ΕΠΙ ΤΗΣ ΕΥΗΜΕΡΙΑΣ»:
-• Η σειρά λήψης λόγου ακολουθεί ΠΑΝΤΑ τον παραπάνω πίνακα (1→18).
-• Οι Μαθηταί μιλούν πρώτοι, ο Μέγ∴ Διδ∴ (αν παρευρίσκεται) τελευταίος.
-• Στο πεδίο "ομιλητές_κατά_σειράν" του JSON, λίσταρε τους ομιλητές
-  στη σωστή σειρά (κατώτερος → ανώτερος).
-• Αν δεν γνωρίζεις τον βαθμό/αξίωμα κάποιου ομιλητή, βάλτον στη μέση.
-
 ════════════════════════════════════════════════════════════════
 ΔΟΜΗ ΚΑΙ ΠΕΡΙΕΧΟΜΕΝΟ ΤΟΥ "κείμενο_πρακτικών"
 ════════════════════════════════════════════════════════════════
 
-Γράψε ΟΛΕΣ τις παρακάτω ενότητες που προκύπτουν από το κείμενο.
-Κάθε ενότητα ξεκινά με τίτλο σε κεφαλαία.
-Κάθε παράγραφος: 3–6 προτάσεις σε σύγχρονη ελληνική.
-
 ΥΠΟΧΡΕΩΤΙΚΕΣ ΕΝΟΤΗΤΕΣ (αν υπάρχουν στο κείμενο):
 
 1. ΕΝΑΡΞΗ — ΚΑΛΩΣΟΡΙΣΜΑ
-   Ο Φιλτ∴ Αδ∴ Σεβ∴ [ΟΝΟΜΑ] άνοιξε τις εργασίες της Σ∴ Στ∴ [ΟΝΟΜΑ] σε
-   Βαθμ∴ [ΒΑΘΜΟΣ], καλωσορίζοντας θερμά όλους τους Αδδ∴ και ιδιαίτερα
-   [ΕΠΙΣΚΕΠΤΕΣ].
-
 2. ΕΠΙΚΥΡΩΣΗ ΠΡΟΗΓΟΥΜΕΝΩΝ ΠΡΑΚΤΙΚΩΝ
    Αναγνώστηκαν τα Πρακτικά της συνεδρίασης της [ΗΜΕΡΟΜΗΝΙΑ] και
    εγκρίθηκαν ομόφωνα ως εχαράχθησαν.
-
-3. ΑΛΛΗΛΟΓΡΑΦΙΑ / ΕΓΚΡΙΤΙΚΟΙ ΠΙΝΑΚΕΣ (αν υπάρχουν)
-
+3. ΑΛΛΗΛΟΓΡΑΦΙΑ / ΕΓΚΡΙΤΙΚΟΙ ΠΙΝΑΚΕΣ (αν υπάρχουν — υποχρεωτική καταγραφή)
 4. ΠΕΝΘΙΜΗ ΧΕΙΡΟΚΡΟΥΣΙΑ (αν υπάρχει)
-   Ο Σεβ∴ κάλεσε το πλήρωμα να φέρει την πενθίμον χειροκρουσίαν
-   εις μνήμην του [ΟΝΟΜΑ]. Το Εργαστήριο απέτισε φόρο τιμής.
-
 5. ΕΓΚΑΤΑΣΤΑΣΗ ΑΞΙΩΜΑΤΙΚΩΝ (αν υπάρχει)
-   Ο Σεβ∴ κάλεσε τους νέους Αξιωματικούς ενώπιον του Βωμού των
-   Επισήμων Διαβεβαιώσεων, όπου έδωσαν τον καθορισμένο όρκο.
-
-6. ΟΜΙΛΙΑ ΕΣΠΕΡΑΣ (τίτλος + περίληψη 5-8 προτάσεων σε σύγχρονη γλώσσα)
-
-7. ΕΠΙ ΤΗΣ ΟΜΙΛΙΑΣ
-   Λόγο πήραν κατά σειρά (κατώτερος → ανώτερος):
-   [Κάθε παρέμβαση σε ξεχωριστή παράγραφο, 3-4 προτάσεων]
-
+6. ΟΜΙΛΙΑ ΕΣΠΕΡΑΣ (τίτλος + περίληψη 5-8 προτάσεων)
+7. ΕΠΙ ΤΗΣ ΟΜΙΛΙΑΣ — λόγο πήραν κατά σειρά (κατώτερος → ανώτερος)
 8. ΑΠΟΧΩΡΗΣΗ ΕΠΙΣΚΕΠΤΗ (αν υπάρχει)
-
 9. ΕΠΙ ΤΗΣ ΕΥΗΜΕΡΙΑΣ (αν υπάρχει)
-   Σύντομη περίληψη σε σύγχρονη γλώσσα.
-
 10. ΣΑΚΟΣ ΠΡΟΤΑΣΕΩΝ (αν υπάρχει)
+11. ΔΙΚΑΙΟΛΟΓΗΘΕΝΤΕΣ — ονόματα όσων δικαιολογήθηκαν κατόπιν αποφάσεως
+    (αν υπάρχουν — υποχρεωτική καταγραφή βάσει Γεν. Κανονισμού)
 
-ΤΙ ΝΑ ΜΗΝ ΣΥΜΠΕΡΙΛΑΒΕΙΣ στο "κείμενο_πρακτικών":
+ΤΙ ΝΑ ΜΗΝ ΣΥΜΠΕΡΙΛΑΒΕΙΣ:
 • ΜΗΝ γράφεις ΚΛΕΙΣΙΜΟ — γίνεται αυτόματα
 • ΜΗΝ γράφεις υπογραφές
 • ΜΗΝ γράφεις "Μη υπάρχοντος ετέρου θέματος..." — γίνεται αυτόματα
@@ -788,39 +761,11 @@ _SYSTEM_PROMPT = f"""
 • ΜΗΝ γράφεις "Ο Κορμός εβλάστησεν..." — γίνεται αυτόματα
 
 ════════════════════════════════════════════════════════════════
-ΑΦΗΓΗΜΑΤΙΚΗ ΡΟΗ
-════════════════════════════════════════════════════════════════
-
-ΑΡΧΗ ΚΕΙΜΕΝΟΥ — ξεκίνα με εισαγωγικό εδάφιο:
-  α) Παρόντες: «Παρευρέθηκαν [ΑΡΙΘΜΟΣ ΟΛΟΓΡΑΦΩΣ] ([ΑΡΙΘΜΟΣ]) Αδδ∴,
-     που υπέγραψαν το Βιβλίον των Παρουσιών.»
-  β) Θέσεις απόντων: «Τις θέσεις των απόντων Αξιωματικών ανέλαβαν:
-     [ΑΞΙΩΜΑ] ο [ΟΝΟΜΑ]...»
-  γ) Ανατολή: «Την Ανατολή κοσμούσαν ο [ΟΝΟΜΑ] και ο [ΟΝΟΜΑ].»
-
-Παράδειγμα:
----
-ΠΑΡΟΝΤΕΣ — ΘΕΣΕΙΣ ΑΞΙΩΜΑΤΙΚΩΝ
-Παρευρέθηκαν δώδεκα (12) Αδδ∴, που υπέγραψαν το Βιβλίον των Παρουσιών.
-Τις θέσεις των απόντων Αξιωματικών ανέλαβαν: Ρήτωρ ο πρ∴ Σεβ∴ Θεόδωρος
-Κεσσανής, Α΄ Επόπτης ο πρ∴ Σεβ∴ Δημήτριος Γεωργακόπουλος.
-Την Ανατολή κοσμούσαν ο πρ∴ Σεβ∴ Θεόδωρος Κεσσανής και ο Ένδοξος Αδ∴
-Μέγας Στεγαστής Δημήτριος Δενεδιός.
----
-
-ΜΕΙΩΣΗ ΕΠΑΝΑΛΗΨΕΩΝ «Ο Φιλτ∴ Αδ∴ Σεβ∴»:
-• Χρησιμοποίησε «Ο Φιλτ∴ Αδ∴ Σεβ∴» ΜΟΝΟ στην πρώτη αναφορά κάθε ενότητας.
-• Στη συνέχεια: «Ο Σεβ∴», «Στη συνέχεια», «Κατόπιν», «Ακολούθως».
-
-════════════════════════════════════════════════════════════════
 ΚΡΙΣΙΜΟ — ΜΟΡΦΗ ΑΠΑΝΤΗΣΗΣ
 ════════════════════════════════════════════════════════════════
 Επέστρεψε ΑΠΟΚΛΕΙΣΤΙΚΑ ένα valid JSON object.
-• Μην γράψεις ΤΙΠΟΤΑ πριν το {{
-• Μην γράψεις ΤΙΠΟΤΑ μετά το }}
 • Χωρίς markdown, χωρίς backticks
 • Στο "κείμενο_πρακτικών" χρησιμοποίησε \\n\\n για αλλαγή παραγράφου
-• Στο "κορμός_ολογράφως" γράψε π.χ. "τριάκοντα και πέντε δεκάτων"
 
 Δομή JSON:
 {{
@@ -833,16 +778,14 @@ _SYSTEM_PROMPT = f"""
   "παρόντες_ολογράφως": "π.χ. δώδεκα",
   "ημερησία_διάταξη": ["θέμα 1", "θέμα 2"],
   "χαιρετισμοί_κατά_σειράν": [
-    "Ένδοξε Μέγ∴ Αξ∴ Δημήτριος Δενεδιός — Μέγας Στεγαστής Μ∴Σ∴Τ∴Ε∴",
-    "Πρώην Σεβάσμιος Ελευθέριος Κεσσανής — πρώην Σεβ∴ Σ∴ Στ∴"
+    "Ένδοξε Μέγ∴ Αξ∴ Δημήτριος Δενεδιός — Μέγας Στεγαστής Μ∴Σ∴Τ∴Ε∴"
   ],
   "ομιλητές_κατά_σειράν": [
-    "Αδ∴ Μαθητής Χρήστος Ιωάννου — σχόλια επί ομιλίας",
-    "Αδ∴ Εταίρος Νίκος Παππάς — παρέμβαση",
-    "Σεβ∴ Διδ∴ Γεώργιος Παρίσης — καλωσόρισμα και έναρξη"
+    "Αδ∴ Μαθητής Χρήστος Ιωάννου — σχόλια επί ομιλίας"
   ],
   "κείμενο_πρακτικών": "ΠΛΗΡΕΙΣ ΠΑΡΑΓΡΑΦΟΙ ΜΕ \\n\\n ΜΕΤΑΞΥ ΤΟΥΣ",
   "αποφάσεις": ["απόφαση 1 αν υπάρχει"],
+  "δικαιολογηθέντες": ["Αδ∴ Ονοματεπώνυμο — αιτία"],
   "κορμός_αγαθοεργίας": 0.0,
   "κορμός_ολογράφως": "ολογράφως π.χ. τριάκοντα",
   "γραμματεύς": "Ονοματεπώνυμο νέου Γραμματέα",
@@ -902,7 +845,7 @@ def _normalize_result_fields(result: dict) -> dict:
         if isinstance(result.get(field), str):
             result[field] = _normalize_tektonic_text(result[field])
     for list_field in ["χαιρετισμοί_κατά_σειράν", "ομιλητές_κατά_σειράν",
-                        "ημερησία_διάταξη", "αποφάσεις"]:
+                        "ημερησία_διάταξη", "αποφάσεις", "δικαιολογηθέντες"]:
         if isinstance(result.get(list_field), list):
             result[list_field] = [
                 _normalize_tektonic_text(item) if isinstance(item, str) else item
@@ -939,7 +882,7 @@ def format_into_praktiko(
         raw_parts: List[str] = []
         with client.messages.stream(
             model=CLAUDE_MODEL,
-            max_tokens=13000,  # ← μειώθηκε από 16000
+            max_tokens=13000,
             system=_SYSTEM_PROMPT,
             messages=[{
                 "role": "user",
@@ -978,16 +921,13 @@ def format_into_praktiko(
                 "Το κείμενο μπήκε στον editor για χειροκίνητη επεξεργασία."
             )
 
-        # Post-process: κανονικοποίηση
         result = _normalize_result_fields(result)
 
-        # Post-process: ταξινόμηση χαιρετισμών (κατά πρωτόκολλο προσφωνήσεων)
         if isinstance(result.get("χαιρετισμοί_κατά_σειράν"), list):
             result["χαιρετισμοί_κατά_σειράν"] = sort_officials_by_protocol(
                 result["χαιρετισμοί_κατά_σειράν"]
             )
 
-        # Post-process: ταξινόμηση ομιλητών (σειρά λήψης λόγου: κατώτερος → ανώτερος)
         if isinstance(result.get("ομιλητές_κατά_σειράν"), list):
             result["ομιλητές_κατά_σειράν"] = sort_speakers_by_omilion(
                 result["ομιλητές_κατά_σειράν"]
@@ -1067,54 +1007,136 @@ def process_docx_to_praktiko(
 
 
 # ══════════════════════════════════════════════════════════════
-# ΕΙΚΟΝΕΣ PDF
+# ΤΕΚΤΟΝΙΚΟ ΣΥΜΒΟΛΟ — ΓΝΩΜΩΝ & ΔΙΑΒΗΤΗΣ (ReportLab vector)
+# Αντικαθιστά την εικόνα masonic.jpg — χωρίς εξωτερικές εξαρτήσεις
 # ══════════════════════════════════════════════════════════════
-_PDF_IMG_MASONIC  = "/tmp/masonic.jpg"
+def draw_masonic_symbol(size_pt: float = 60.0, navy: str = NAVY, gold: str = GOLD):
+    """
+    Σχεδιάζει τον Γνώμονα & Διαβήτη (Square & Compasses) ως ReportLab Drawing.
+    Επιστρέφει ένα Drawing αντικείμενο που μπορεί να ενσωματωθεί στο PDF.
+    """
+    from reportlab.graphics.shapes import (
+        Drawing, Line, Circle, String, Path, Group,
+    )
+    from reportlab.graphics import renderPDF
+    from reportlab.lib import colors
+
+    navy_color = colors.HexColor(navy)
+    gold_color = colors.HexColor(gold)
+
+    d = Drawing(size_pt, size_pt)
+    cx = size_pt / 2
+    cy = size_pt / 2
+    s  = size_pt / 60  # κλίμακα
+
+    # ── Γνώμων (Square) — L-σχήμα κάτω ──────────────────────
+    sq_thick = 3.5 * s
+    sq_arm   = 20 * s   # μήκος βραχίονα
+    sq_x     = cx - 10 * s
+    sq_y     = cy - 14 * s
+
+    # Κατακόρυφος βραχίονας
+    d.add(Line(sq_x, sq_y, sq_x, sq_y + sq_arm,
+               strokeColor=navy_color, strokeWidth=sq_thick,
+               strokeLineCap=1))
+    # Οριζόντιος βραχίονας
+    d.add(Line(sq_x, sq_y, sq_x + sq_arm, sq_y,
+               strokeColor=navy_color, strokeWidth=sq_thick,
+               strokeLineCap=1))
+
+    # ── Διαβήτης (Compasses) — δύο σκέλη + άρθρωση ──────────
+    pivot_x = cx + 4 * s
+    pivot_y = cy + 18 * s
+    leg_len  = 24 * s
+    spread   = 28  # μοίρες άνοιγμα
+
+    # Αριστερό σκέλος
+    angle_l = math.radians(270 - spread)
+    lx = pivot_x + leg_len * math.cos(angle_l)
+    ly = pivot_y + leg_len * math.sin(angle_l)
+    d.add(Line(pivot_x, pivot_y, lx, ly,
+               strokeColor=navy_color, strokeWidth=3.5 * s,
+               strokeLineCap=1))
+
+    # Δεξί σκέλος
+    angle_r = math.radians(270 + spread)
+    rx = pivot_x + leg_len * math.cos(angle_r)
+    ry = pivot_y + leg_len * math.sin(angle_r)
+    d.add(Line(pivot_x, pivot_y, rx, ry,
+               strokeColor=navy_color, strokeWidth=3.5 * s,
+               strokeLineCap=1))
+
+    # Άρθρωση (κόμβος άνω)
+    d.add(Circle(pivot_x, pivot_y, 3 * s,
+                 fillColor=gold_color, strokeColor=navy_color,
+                 strokeWidth=1 * s))
+
+    # Μικρές μύτες στα άκρα των σκελών
+    for tip_x, tip_y in [(lx, ly), (rx, ry)]:
+        d.add(Circle(tip_x, tip_y, 1.8 * s,
+                     fillColor=navy_color, strokeColor=navy_color,
+                     strokeWidth=0.5 * s))
+
+    # ── Γράμμα G (κέντρο) ─────────────────────────────────────
+    d.add(String(cx - 1 * s, cy - 3 * s, "G",
+                 fontSize=13 * s,
+                 fontName="Helvetica-Bold",
+                 fillColor=gold_color,
+                 textAnchor="middle"))
+
+    return d
+
+
+def _masonic_symbol_as_rl_image(size_pt: float = 60.0):
+    """
+    Επιστρέφει το μασονικό σύμβολο ως ReportLab Flowable (Drawing).
+    Χρησιμοποιείται απευθείας στο story του PDF.
+    """
+    from reportlab.graphics.renderPDF import GraphicsFlowable
+    drw = draw_masonic_symbol(size_pt)
+    drw.hAlign = "CENTER"
+    return drw
+
+
+# ══════════════════════════════════════════════════════════════
+# ΕΙΚΟΝΑ ΑΚΡΟΠΟΛΗΣ (προαιρετική)
+# ══════════════════════════════════════════════════════════════
 _PDF_IMG_ACROPOLIS = "/tmp/acropolis.jpg"
 
 
-def _find_pdf_image(tmp_path: str, filename: str) -> Optional[str]:
-    import os as _os
-    if _os.path.exists(tmp_path):
-        return tmp_path
+def _find_acropolis_image() -> Optional[str]:
     candidates = [
-        _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), filename),
-        _os.path.join(_os.getcwd(), filename),
-        _os.path.join("/mount/src/grammateas/assets", filename),
+        _PDF_IMG_ACROPOLIS,
+        "/mount/src/grammateas/assets/acropolis.jpg",
+        "/mount/src/grammateas/static/acropolis.jpg",
+        os.path.join(os.getcwd(), "assets", "acropolis.jpg"),
+        os.path.join(os.getcwd(), "acropolis.jpg"),
     ]
     for c in candidates:
-        if _os.path.exists(c):
+        if os.path.exists(c):
             return c
     return None
 
 
-def _ensure_pdf_images():
+def _ensure_acropolis_image():
     import shutil as _sh
-    _lookup = {
-        _PDF_IMG_MASONIC: [
-            "/mount/src/grammateas/assets/masonic.jpg",
-            "/mount/src/grammateas/static/masonic.jpg",
-            os.path.join(os.getcwd(), "assets", "masonic.jpg"),
-            os.path.join(os.getcwd(), "masonic.jpg"),
-        ],
-        _PDF_IMG_ACROPOLIS: [
-            "/mount/src/grammateas/assets/acropolis.jpg",
-            "/mount/src/grammateas/static/acropolis.jpg",
-            os.path.join(os.getcwd(), "assets", "acropolis.jpg"),
-            os.path.join(os.getcwd(), "acropolis.jpg"),
-        ],
-    }
-    for dest, sources in _lookup.items():
-        if not os.path.exists(dest):
-            for src_path in sources:
-                if os.path.exists(src_path):
-                    try:
-                        _sh.copy2(src_path, dest)
-                        break
-                    except Exception:
-                        pass
+    if os.path.exists(_PDF_IMG_ACROPOLIS):
+        return
+    sources = [
+        "/mount/src/grammateas/assets/acropolis.jpg",
+        "/mount/src/grammateas/static/acropolis.jpg",
+        os.path.join(os.getcwd(), "assets", "acropolis.jpg"),
+        os.path.join(os.getcwd(), "acropolis.jpg"),
+    ]
+    for src in sources:
+        if os.path.exists(src):
+            try:
+                _sh.copy2(src, _PDF_IMG_ACROPOLIS)
+            except Exception:
+                pass
+            break
 
-_ensure_pdf_images()
+_ensure_acropolis_image()
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1164,22 +1186,16 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
 
     story: list = []
 
-    masonic_path = _find_pdf_image(_PDF_IMG_MASONIC, "masonic.jpg")
-    if masonic_path:
-        try:
-            logo = RLImage(masonic_path, width=2.2*cm, height=2.2*cm)
-            logo.hAlign = "CENTER"
-            story.append(logo)
-            story.append(Spacer(1, 0.2*cm))
-        except Exception:
-            pass
+    # ── Γνώμων & Διαβήτης (vector — χωρίς εξωτερική εικόνα) ──
+    story.append(_masonic_symbol_as_rl_image(size_pt=62))
+    story.append(Spacer(1, 0.15 * cm))
 
     story += [
         Paragraph("Ε∴Δ∴Τ∴Μ∴Α∴Τ∴Σ∴", H1),
         Paragraph("Εν Ονόματι και Υπό την Αιγίδα", H2),
         Paragraph("της Μεγάλης Στοάς της Ελλάδος", H2),
         Paragraph("των Αρχαίων Ελευθέρων και Αποδεδεγμένων Τεκτόνων", H2),
-        Spacer(1, 0.1*cm),
+        Spacer(1, 0.1 * cm),
         Paragraph("Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ υπ' αρ. 84 · εν Αν∴ Αθ∴", LDG),
         HRFlowable(width="100%", thickness=1.5, color=cnvy, spaceAfter=6),
         Paragraph(
@@ -1189,10 +1205,11 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
         HRFlowable(width="100%", thickness=0.5, color=cgold, spaceAfter=8),
     ]
 
-    acropolis_path = _find_pdf_image(_PDF_IMG_ACROPOLIS, "acropolis.jpg")
+    # ── Φωτογραφία Ακρόπολης (προαιρετική) ───────────────────
+    acropolis_path = _find_acropolis_image()
     if acropolis_path:
         try:
-            acro = RLImage(acropolis_path, width=16*cm, height=5*cm)
+            acro = RLImage(acropolis_path, width=16 * cm, height=5 * cm)
             acro.hAlign = "CENTER"
             story.append(acro)
             story.append(Paragraph(
@@ -1203,7 +1220,7 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
         except Exception:
             pass
 
-    story.append(Spacer(1, 0.3*cm))
+    story.append(Spacer(1, 0.3 * cm))
 
     body = d.get("κείμενο_πρακτικών", "") or ""
 
@@ -1217,13 +1234,14 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
         story += [
             Paragraph("<b>ΠΑΡΟΝΤΕΣ — ΘΕΣΕΙΣ ΑΞΙΩΜΑΤΙΚΩΝ</b>", SEC),
             Paragraph(" ".join(intro_lines), BOD),
-            Spacer(1, 0.1*cm),
+            Spacer(1, 0.1 * cm),
         ]
 
+    # ── Κύριο σώμα κειμένου ──────────────────────────────────
     masonic_inserted = False
 
     paragraphs = [p.strip() for p in body.split("\n\n") if p.strip()]
-    for idx, para in enumerate(paragraphs):
+    for para in paragraphs:
         lines = [l.strip() for l in para.split("\n") if l.strip()]
         if not lines:
             continue
@@ -1240,17 +1258,17 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
             header_text = xe(first_line)
             rest_lines  = lines[1:]
 
-            if (not masonic_inserted
-                    and masonic_path
-                    and "ΟΜΙΛΙΑ" in first_line):
+            if (not masonic_inserted and "ΟΜΙΛΙΑ" in first_line):
                 masonic_inserted = True
                 try:
-                    sym = RLImage(masonic_path, width=1.4*cm, height=1.4*cm)
-                    sym_cell = [sym]
+                    # Τοποθέτηση του vector συμβόλου δίπλα στον τίτλο ομιλίας
+                    sym_drawing = draw_masonic_symbol(size_pt=28)
+                    sym_drawing.hAlign = "RIGHT"
                     hdr_cell = [Paragraph(f"<b>{header_text}</b>", SEC)]
+                    sym_cell = [sym_drawing]
                     tbl = Table(
                         [[hdr_cell, sym_cell]],
-                        colWidths=[13.5*cm, 1.5*cm],
+                        colWidths=[13.5 * cm, 1.5 * cm],
                         hAlign="LEFT",
                     )
                     story.append(tbl)
@@ -1268,6 +1286,14 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
             else:
                 story.append(Paragraph(xe(para.replace("\n", " ")), BOD))
 
+    # ── Δικαιολογηθέντες (Γενικός Κανονισμός) ────────────────
+    δικ = d.get("δικαιολογηθέντες", []) or []
+    if δικ:
+        story.append(Paragraph("<b>ΔΙΚΑΙΟΛΟΓΗΘΕΝΤΕΣ</b>", SEC))
+        for item in δικ:
+            story.append(Paragraph(xe(str(item)), BUL))
+
+    # ── Κορμός Αγαθοεργίας ───────────────────────────────────
     κορμ = float(d.get("κορμός_αγαθοεργίας", 0) or 0)
     κολ  = d.get("κορμός_ολογράφως", "") or ""
     if κορμ:
@@ -1277,6 +1303,7 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
             BOD
         ))
 
+    # ── Κλείσιμο ─────────────────────────────────────────────
     if σεβ:
         closing_1 = (
             f"Μη υπάρχοντος ετέρου θέματος, οι εργασίες έκλεισαν κανονικά υπό την "
@@ -1293,37 +1320,38 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
         "αποχώρησαν εν ειρήνη για το Ποτήριον της Αγάπης."
     )
     story += [
-        Spacer(1, 0.35*cm),
+        Spacer(1, 0.35 * cm),
         Paragraph(closing_1, BOD),
-        Spacer(1, 0.1*cm),
+        Spacer(1, 0.1 * cm),
         Paragraph(closing_2, BOD),
-        Spacer(1, 0.25*cm),
+        Spacer(1, 0.25 * cm),
         Paragraph("Είπον Σεβ∴ Διδ∴.", IPO),
-        Spacer(1, 0.4*cm),
+        Spacer(1, 0.4 * cm),
         HRFlowable(width="100%", thickness=0.5, color=cnvy, spaceAfter=14),
     ]
 
+    # ── Υπογραφές ────────────────────────────────────────────
     def sig_col(title, name):
         return [
             Paragraph(title, SGN),
-            Spacer(1, 1.0*cm),
+            Spacer(1, 1.0 * cm),
             Paragraph(xe(name), SGNB),
         ]
 
     story.append(
         Table([[sig_col("Ο Σεβ∴ Διδ∴", σεβ)]],
-              colWidths=[14*cm], hAlign="CENTER")
+              colWidths=[14 * cm], hAlign="CENTER")
     )
-    story.append(Spacer(1, 0.7*cm))
+    story.append(Spacer(1, 0.7 * cm))
     story.append(
         Table(
             [[sig_col("Ο Γραμματεύς", γραμ), sig_col("Ο Ρήτωρ", ρητ)]],
-            colWidths=[7*cm, 7*cm], hAlign="CENTER",
+            colWidths=[7 * cm, 7 * cm], hAlign="CENTER",
         )
     )
 
     story += [
-        Spacer(1, 0.6*cm),
+        Spacer(1, 0.6 * cm),
         HRFlowable(width="100%", thickness=0.3, color=colors.lightgrey),
         Paragraph(
             f"Αρ. Πρωτ.: {xe(d.get('αρ_πρωτ', ''))} · "
@@ -1335,8 +1363,8 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
     buf = io.BytesIO()
     SimpleDocTemplate(
         buf, pagesize=A4,
-        rightMargin=2.5*cm, leftMargin=2.5*cm,
-        topMargin=1.8*cm, bottomMargin=1.8*cm,
+        rightMargin=2.5 * cm, leftMargin=2.5 * cm,
+        topMargin=1.8 * cm, bottomMargin=1.8 * cm,
         title=f"Πρακτικό Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ 84 — {ημερ}",
     ).build(story)
     buf.seek(0)
@@ -1353,10 +1381,10 @@ def show_editor(r: dict, key_prefix: str = "") -> dict:
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        r["ημερομηνία"]    = st.text_input("Ημερομηνία (DD/MM/YYYY)", r.get("ημερομηνία", ""),           key=f"{key_prefix}dat")
-        r["ημέρα"]         = st.text_input("Ημέρα",                    r.get("ημέρα", ""),               key=f"{key_prefix}day")
-        r["βαθμός_γενική"] = st.text_input("Βαθμός γενική",            r.get("βαθμός_γενική", "Μαθητού"),key=f"{key_prefix}deg")
-        r["τόπος"]         = st.text_input("Τόπος",                    r.get("τόπος", "τον Τεκτ∴ Ναόν"), key=f"{key_prefix}plc")
+        r["ημερομηνία"]    = st.text_input("Ημερομηνία (DD/MM/YYYY)", r.get("ημερομηνία", ""),            key=f"{key_prefix}dat")
+        r["ημέρα"]         = st.text_input("Ημέρα",                    r.get("ημέρα", ""),                key=f"{key_prefix}day")
+        r["βαθμός_γενική"] = st.text_input("Βαθμός γενική",            r.get("βαθμός_γενική", "Μαθητού"), key=f"{key_prefix}deg")
+        r["τόπος"]         = st.text_input("Τόπος",                    r.get("τόπος", "τον Τεκτ∴ Ναόν"),  key=f"{key_prefix}plc")
     with c2:
         r["σεβάσμιος"]  = st.text_input("Σεβ∴ Διδ∴",       r.get("σεβάσμιος", ""),  key=f"{key_prefix}sev")
         r["γραμματεύς"] = st.text_input("Γραμματεύς",       r.get("γραμματεύς", ""), key=f"{key_prefix}grm")
@@ -1377,9 +1405,7 @@ def show_editor(r: dict, key_prefix: str = "") -> dict:
     r["ημερησία_διάταξη"] = [l.strip() for l in agenda_raw.splitlines() if l.strip()]
 
     st.markdown("#### 🎩 Χαιρετισμοί κατά πρωτόκολλον (Εγκ. 27/2019)")
-    st.caption(
-        "Ένας ανά γραμμή. Μορφή: «Προσφώνηση Ονοματεπώνυμο — Αξίωμα»"
-    )
+    st.caption("Ένας ανά γραμμή. Μορφή: «Προσφώνηση Ονοματεπώνυμο — Αξίωμα»")
     xairet_raw = st.text_area(
         "Χαιρετισμοί",
         "\n".join(r.get("χαιρετισμοί_κατά_σειράν", []) or []),
@@ -1418,6 +1444,16 @@ def show_editor(r: dict, key_prefix: str = "") -> dict:
             )
             st.success("✅ Η λίστα ταξινομήθηκε.")
             st.rerun()
+
+    # ── Δικαιολογηθέντες (Γεν. Κανονισμός) ──────────────────
+    st.markdown("#### 📌 Δικαιολογηθέντες (Γεν. Κανονισμός)")
+    st.caption("Ένας ανά γραμμή. Μορφή: «Αδ∴ Ονοματεπώνυμο — αιτία δικαιολόγησης»")
+    δικ_raw = st.text_area(
+        "Δικαιολογηθέντες",
+        "\n".join(r.get("δικαιολογηθέντες", []) or []),
+        height=80, label_visibility="collapsed", key=f"{key_prefix}dik",
+    )
+    r["δικαιολογηθέντες"] = [l.strip() for l in δικ_raw.splitlines() if l.strip()]
 
     st.markdown("#### 📄 Κείμενο Πρακτικών")
     r["κείμενο_πρακτικών"] = st.text_area("Κείμενο Πρακτικών",
@@ -1467,6 +1503,7 @@ def finalize_result(result, sel_σεβ, sel_γραμ, sel_ρητ, sel_βαθμ, 
         result["ημερομηνία"] = sel_ημερ.strftime("%d/%m/%Y")
     result.setdefault("χαιρετισμοί_κατά_σειράν", [])
     result.setdefault("ομιλητές_κατά_σειράν", [])
+    result.setdefault("δικαιολογηθέντες", [])
     return result
 
 
@@ -1725,6 +1762,15 @@ with tab_help:
     ## Μοντέλο Claude
     `{CLAUDE_MODEL}` · max_tokens: 13 000
 
+    ## Γενικός Κανονισμός — Υποχρεωτικό περιεχόμενο Πρακτικών
+
+    Ο Γραμματεύς-Σφραγιδοφύλαξ μνημονεύει υποχρεωτικά:
+    - Τον **αριθμό παρόντων** μελών
+    - Το **όνομα αναπληρωτή** κάθε απόντος Αξιωματικού
+    - **Πάσαν αλληλογραφίαν** που αναγνώστηκε
+    - **Πάσαν ομιλίαν και συζήτησιν** εν περιλήψει
+    - Τα **ονόματα των δικαιολογηθέντων** κατόπιν αποφάσεως Στοάς
+
     ## Πρωτόκολλο Τάξης Προσφωνήσεων (Εγκ. 27/2019 — Πίνακας Α)
 
     | # | Αξίωμα | Προσφώνηση |
@@ -1751,22 +1797,12 @@ with tab_help:
     | 2 | Εταίροι, μέλη άλλων Στοών | Βορράς |
     | 3 | Διδάσκαλοι, μέλη άλλων Στοών | Μεσημβρία |
     | 4 | Αξιωματικοί Στοάς | Μεσημβρία |
-    | 5 | Επί Τιμή Σεβάσμιοι | Αριστερά Σεβ. |
-    | 6 | Πρώην Σεβάσμιοι / Επιθεωρηταί | Αριστερά Σεβ. |
+    | 5–6 | Επί Τιμή / Πρώην Σεβάσμιοι | Αριστερά Σεβ. |
     | 7 | Σεβάσμιοι | Δεξιά Σεβ. |
-    | 8 | Ομότιμοι Κοσμήτορες | Αριστερά Σεβ. |
-    | 9 | Κοσμήτορες | Δεξιά Σεβ. |
-    | 10 | Μέγας Επιθεωρητής | Δεξιά Σεβ. |
-    | 11 | Πρόσθετοι Μέγ. Αξιωματικοί | Δεξιά Σεβ. |
-    | 12 | Επίτιμα Μέλη Μ.Σ.Τ.Ε. | Δεξιά Σεβ. |
-    | 13 | Πρώην Μέγ. Αξιωματικοί | Αριστερά Σεβ. |
-    | 14 | Μεγάλοι Αξιωματικοί | Δεξιά Σεβ. |
-    | 15 | Πρόσθετος Μέγ. Διδάσκαλος | Δεξιά Σεβ. |
-    | 16 | Πρώην Μέγ. Διδάσκαλοι | Αριστερά Σεβ. |
-    | 17 | Επίτιμοι Μέγ. Διδάσκαλοι | Αριστερά Σεβ. |
+    | 8–10 | Κοσμήτορες / Μέγ∴ Επιθ∴ | Αριστερά/Δεξιά Σεβ. |
+    | 11–14 | Μεγάλοι Αξιωματικοί | Αριστερά/Δεξιά Σεβ. |
+    | 15–17 | Πρόσθετοι/Πρώην/Επίτιμοι Μέγ∴ Διδ∴ | Αριστερά Σεβ. |
     | 18 | Μέγας Διδάσκαλος | — |
-
-    Ο Claude ταξινομεί αυτόματα. Στον editor υπάρχει κουμπί **🔀 Αυτόματη ταξινόμηση ομιλητών**.
 
     ## Streamlit Secrets
     ```toml
