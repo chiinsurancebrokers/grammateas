@@ -696,6 +696,17 @@ _SYSTEM_PROMPT = f"""
 • Χρησιμοποίησε «ο Σεβ∴» (όχι «ο Φιλτ∴ Αδ∴ Σεβ∴» σε κάθε πρόταση —
   μόνο στην πρώτη αναφορά κάθε ενότητας).
 
+ΚΑΝΟΝΕΣ ΠΡΟΣΦΩΝΗΣΗΣ ΑΔΕΛΦΩΝ ΣΤΗΝ ΑΦΗΓΗΣΗ:
+• Η σειρά είναι ΠΑΝΤΑ: [Αξίωμα] Αδ∴ [Ονοματεπώνυμο]
+  ΣΩΣΤΟ: «ο Β΄ Επόπτης Αδ∴ Χαράλαμπος Παπαβασιλείου»
+  ΣΩΣΤΟ: «ο Γραμμ∴ Αδ∴ Χρήστος Ιατρόπουλος»
+  ΣΩΣΤΟ: «ο Πρ∴ Σεβ∴ Αδ∴ Θεόδωρος Κεσσανής»
+  ΛΑΘΟΣ: «ο Αδ∴ Β΄ Επόπτης Χαράλαμπος Παπαβασιλείου»
+  ΛΑΘΟΣ: «ο Αδ∴ Χρήστος Ιατρόπουλος» (χωρίς αξίωμα)
+• Για Αξιωματικούς Μεγάλης Στοάς: «ο Ένδοξος Αδ∴ [Ονοματεπώνυμο]»
+• Connector words μεταξύ ενοτήτων: «Εν συνεχεία», «Ακολούθως»,
+  «Κατόπιν», «Λαμβάνοντας τον λόγο εκ νέου», «Κλείνοντας».
+
 ΤΕΚΤΟΝΙΚΕΣ ΦΡΑΣΕΙΣ ΠΟΥ ΔΙΑΤΗΡΟΥΝΤΑΙ ΑΝΑΛΛΟΙΩΤΕΣ:
 • «ως εχαράχθησαν» (μόνο για επικύρωση πρακτικών)
 • «εις Αιωνίαν Ανατολήν» (για μεταστάντα μέλη)
@@ -750,8 +761,18 @@ _SYSTEM_PROMPT = f"""
 8. ΑΠΟΧΩΡΗΣΗ ΕΠΙΣΚΕΠΤΗ (αν υπάρχει)
 9. ΕΠΙ ΤΗΣ ΕΥΗΜΕΡΙΑΣ (αν υπάρχει)
 10. ΣΑΚΟΣ ΠΡΟΤΑΣΕΩΝ (αν υπάρχει)
-11. ΔΙΚΑΙΟΛΟΓΗΘΕΝΤΕΣ — ονόματα όσων δικαιολογήθηκαν κατόπιν αποφάσεως
-    (αν υπάρχουν — υποχρεωτική καταγραφή βάσει Γεν. Κανονισμού)
+    Περιήχθη ο Σάκος των Προτάσεων, ο οποίος κόμισε δικαιολόγηση του
+    απόντος Αδ∴ [ΟΝΟΜΑ] μετά του οβολού του.
+    — ΜΗΝ γράφεις ξεχωριστή ενότητα ΔΙΚΑΙΟΛΟΓΗΘΕΝΤΕΣ αν έχεις ήδη
+      αναφέρει τη δικαιολόγηση στον Σάκο — αποφεύγεται ο πλεονασμός.
+    — Αν η δικαιολόγηση δεν αναφέρθηκε στον Σάκο, τότε πρόσθεσε:
+      ΔΙΚΑΙΟΛΟΓΗΘΕΝΤΕΣ: [ΟΝΟΜΑ] — δικαιολόγησε απουσία [αιτία]
+
+ΚΛΕΙΣΙΜΟ (γράφεται αυτόματα — μη το συμπεριλάβεις):
+«Οι εργασίες έκλεισαν κανονικώς υπό την Σφύραν του Σεβ∴ Διδ∴ [ΟΝΟΜΑ],
+με τους αδδ∴ της Σ∴ Στ∴ ημών ευχαριστημένους και ικανοποιημένους,
+υποσχόμενοι σιγή επί των σημερινών Εργασιών και αποχώρησαν εν ειρήνη
+για το Ποτήριον της Αγάπης.»
 
 ΤΙ ΝΑ ΜΗΝ ΣΥΜΠΕΡΙΛΑΒΕΙΣ:
 • ΜΗΝ γράφεις ΚΛΕΙΣΙΜΟ — γίνεται αυτόματα
@@ -1007,95 +1028,52 @@ def process_docx_to_praktiko(
 
 
 # ══════════════════════════════════════════════════════════════
-# ΤΕΚΤΟΝΙΚΟ ΣΥΜΒΟΛΟ — ΓΝΩΜΩΝ & ΔΙΑΒΗΤΗΣ (ReportLab vector)
-# Αντικαθιστά την εικόνα masonic.jpg — χωρίς εξωτερικές εξαρτήσεις
+# ΤΕΚΤΟΝΙΚΟ ΣΥΜΒΟΛΟ — εικόνα από assets (webp/png)
+# Πρώτη επιλογή: assets/masonic_gold.png (ή .webp)
+# Αν δεν βρεθεί: fallback σε απλό vector
 # ══════════════════════════════════════════════════════════════
-def draw_masonic_symbol(size_pt: float = 60.0, navy: str = NAVY, gold: str = GOLD):
-    """
-    Σχεδιάζει τον Γνώμονα & Διαβήτη (Square & Compasses) ως ReportLab Drawing.
-    Επιστρέφει ένα Drawing αντικείμενο που μπορεί να ενσωματωθεί στο PDF.
-    """
-    from reportlab.graphics.shapes import (
-        Drawing, Line, Circle, String, Path, Group,
-    )
-    from reportlab.graphics import renderPDF
-    from reportlab.lib import colors
-
-    navy_color = colors.HexColor(navy)
-    gold_color = colors.HexColor(gold)
-
-    d = Drawing(size_pt, size_pt)
-    cx = size_pt / 2
-    cy = size_pt / 2
-    s  = size_pt / 60  # κλίμακα
-
-    # ── Γνώμων (Square) — L-σχήμα κάτω ──────────────────────
-    sq_thick = 3.5 * s
-    sq_arm   = 20 * s   # μήκος βραχίονα
-    sq_x     = cx - 10 * s
-    sq_y     = cy - 14 * s
-
-    # Κατακόρυφος βραχίονας
-    d.add(Line(sq_x, sq_y, sq_x, sq_y + sq_arm,
-               strokeColor=navy_color, strokeWidth=sq_thick,
-               strokeLineCap=1))
-    # Οριζόντιος βραχίονας
-    d.add(Line(sq_x, sq_y, sq_x + sq_arm, sq_y,
-               strokeColor=navy_color, strokeWidth=sq_thick,
-               strokeLineCap=1))
-
-    # ── Διαβήτης (Compasses) — δύο σκέλη + άρθρωση ──────────
-    pivot_x = cx + 4 * s
-    pivot_y = cy + 18 * s
-    leg_len  = 24 * s
-    spread   = 28  # μοίρες άνοιγμα
-
-    # Αριστερό σκέλος
-    angle_l = math.radians(270 - spread)
-    lx = pivot_x + leg_len * math.cos(angle_l)
-    ly = pivot_y + leg_len * math.sin(angle_l)
-    d.add(Line(pivot_x, pivot_y, lx, ly,
-               strokeColor=navy_color, strokeWidth=3.5 * s,
-               strokeLineCap=1))
-
-    # Δεξί σκέλος
-    angle_r = math.radians(270 + spread)
-    rx = pivot_x + leg_len * math.cos(angle_r)
-    ry = pivot_y + leg_len * math.sin(angle_r)
-    d.add(Line(pivot_x, pivot_y, rx, ry,
-               strokeColor=navy_color, strokeWidth=3.5 * s,
-               strokeLineCap=1))
-
-    # Άρθρωση (κόμβος άνω)
-    d.add(Circle(pivot_x, pivot_y, 3 * s,
-                 fillColor=gold_color, strokeColor=navy_color,
-                 strokeWidth=1 * s))
-
-    # Μικρές μύτες στα άκρα των σκελών
-    for tip_x, tip_y in [(lx, ly), (rx, ry)]:
-        d.add(Circle(tip_x, tip_y, 1.8 * s,
-                     fillColor=navy_color, strokeColor=navy_color,
-                     strokeWidth=0.5 * s))
-
-    # ── Γράμμα G (κέντρο) ─────────────────────────────────────
-    d.add(String(cx - 1 * s, cy - 3 * s, "G",
-                 fontSize=13 * s,
-                 fontName="Helvetica-Bold",
-                 fillColor=gold_color,
-                 textAnchor="middle"))
-
-    return d
+_MASONIC_CANDIDATES = [
+    "/mount/src/grammateas/assets/masonic.jpg",
+    "/mount/src/grammateas/assets/masonic_gold.png",
+    "/mount/src/grammateas/assets/square_and_compass.webp",
+    os.path.join(os.getcwd(), "assets", "masonic.jpg"),
+    os.path.join(os.getcwd(), "assets", "masonic_gold.png"),
+    os.path.join(os.getcwd(), "assets", "square_and_compass.webp"),
+    os.path.join(os.getcwd(), "masonic.jpg"),
+    "/tmp/masonic_gold.png",
+]
 
 
-def _masonic_symbol_as_rl_image(size_pt: float = 60.0):
-    """
-    Επιστρέφει το μασονικό σύμβολο ως ReportLab Flowable (Drawing).
-    Χρησιμοποιείται απευθείας στο story του PDF.
-    """
-    from reportlab.graphics.renderPDF import GraphicsFlowable
-    drw = draw_masonic_symbol(size_pt)
-    drw.hAlign = "CENTER"
-    return drw
+def _find_masonic_image() -> Optional[str]:
+    """Βρίσκει την εικόνα του συμβόλου. webp → PNG αν χρειάζεται."""
+    for path in _MASONIC_CANDIDATES:
+        if not os.path.exists(path):
+            continue
+        if path.endswith(".webp"):
+            png_out = "/tmp/masonic_conv.png"
+            if not os.path.exists(png_out):
+                try:
+                    from PIL import Image as _PILImg
+                    _PILImg.open(path).convert("RGBA").save(png_out, "PNG")
+                except Exception:
+                    continue
+            return png_out
+        # .jpg / .png — ReportLab τα διαβάζει απευθείας
+        return path
+    return None
+
+
+def masonic_image_flowable(width_cm: float = 2.4, height_cm: float = None):
+    """Επιστρέφει ReportLab Image του γνώμονα & διαβήτη ή fallback Spacer."""
+    from reportlab.platypus import Image as _RLImg
+    path = _find_masonic_image()
+    if not path:
+        return Spacer(1, 0.1 * cm)
+    w = width_cm * cm
+    h = (height_cm * cm) if height_cm else w * (330 / 283)
+    img = _RLImg(path, width=w, height=h)
+    img.hAlign = "CENTER"
+    return img
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1186,8 +1164,8 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
 
     story: list = []
 
-    # ── Γνώμων & Διαβήτης (vector — χωρίς εξωτερική εικόνα) ──
-    story.append(_masonic_symbol_as_rl_image(size_pt=62))
+    # ── Γνώμων & Διαβήτης (εικόνα) ────────────────────────────
+    story.append(masonic_image_flowable(width_cm=2.4))
     story.append(Spacer(1, 0.15 * cm))
 
     story += [
@@ -1261,11 +1239,9 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
             if (not masonic_inserted and "ΟΜΙΛΙΑ" in first_line):
                 masonic_inserted = True
                 try:
-                    # Τοποθέτηση του vector συμβόλου δίπλα στον τίτλο ομιλίας
-                    sym_drawing = draw_masonic_symbol(size_pt=28)
-                    sym_drawing.hAlign = "RIGHT"
+                    sym_img = masonic_image_flowable(width_cm=1.1)
                     hdr_cell = [Paragraph(f"<b>{header_text}</b>", SEC)]
-                    sym_cell = [sym_drawing]
+                    sym_cell = [sym_img]
                     tbl = Table(
                         [[hdr_cell, sym_cell]],
                         colWidths=[13.5 * cm, 1.5 * cm],
@@ -1306,31 +1282,27 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
     # ── Κλείσιμο ─────────────────────────────────────────────
     if σεβ:
         closing_1 = (
-            f"Μη υπάρχοντος ετέρου θέματος, οι εργασίες έκλεισαν κανονικά υπό την "
-            f"Σφύρα του Σεβ∴ Διδ∴ <b>{xe(σεβ)}</b>, με τους Αδδ∴ της Σ∴ Στ∴ ημών "
-            f"ευχαριστημένους και ικανοποιημένους."
+            f"Οι εργασίες έκλεισαν κανονικώς υπό την Σφύραν του Σεβ∴ Διδ∴ "
+            f"<b>{xe(σεβ)}</b>, με τους αδδ∴ της Σ∴ Στ∴ ημών ευχαριστημένους "
+            f"και ικανοποιημένους, υποσχόμενοι σιγή επί των σημερινών Εργασιών "
+            f"και αποχώρησαν εν ειρήνη για το Ποτήριον της Αγάπης."
         )
     else:
         closing_1 = (
-            "Μη υπάρχοντος ετέρου θέματος, οι εργασίες έκλεισαν κανονικά, "
-            "με τους Αδδ∴ της Σ∴ Στ∴ ημών ευχαριστημένους και ικανοποιημένους."
+            "Οι εργασίες έκλεισαν κανονικώς, με τους αδδ∴ της Σ∴ Στ∴ ημών "
+            "ευχαριστημένους και ικανοποιημένους, υποσχόμενοι σιγή επί των "
+            "σημερινών Εργασιών και αποχώρησαν εν ειρήνη για το Ποτήριον της Αγάπης."
         )
-    closing_2 = (
-        "Οι Αδδ∴, αφού διαβεβαίωσαν ότι θα τηρήσουν σιγή για τις Εργασίες, "
-        "αποχώρησαν εν ειρήνη για το Ποτήριον της Αγάπης."
-    )
     story += [
         Spacer(1, 0.35 * cm),
         Paragraph(closing_1, BOD),
-        Spacer(1, 0.1 * cm),
-        Paragraph(closing_2, BOD),
         Spacer(1, 0.25 * cm),
         Paragraph("Είπον Σεβ∴ Διδ∴.", IPO),
         Spacer(1, 0.4 * cm),
         HRFlowable(width="100%", thickness=0.5, color=cnvy, spaceAfter=14),
     ]
 
-    # ── Υπογραφές ────────────────────────────────────────────
+    # ── Υπογραφές — σειρά: Σεβ∴ | Ρήτωρ | Γραμματεύς ────────
     def sig_col(title, name):
         return [
             Paragraph(title, SGN),
@@ -1339,14 +1311,12 @@ def generate_praktiko_pdf(d: dict) -> io.BytesIO:
         ]
 
     story.append(
-        Table([[sig_col("Ο Σεβ∴ Διδ∴", σεβ)]],
-              colWidths=[14 * cm], hAlign="CENTER")
-    )
-    story.append(Spacer(1, 0.7 * cm))
-    story.append(
         Table(
-            [[sig_col("Ο Γραμματεύς", γραμ), sig_col("Ο Ρήτωρ", ρητ)]],
-            colWidths=[7 * cm, 7 * cm], hAlign="CENTER",
+            [[sig_col("Ο Σεβ∴ Διδ∴", σεβ),
+              sig_col("Ο Ρήτωρ", ρητ),
+              sig_col("Ο Γραμματεύς", γραμ)]],
+            colWidths=[5.5 * cm, 5.5 * cm, 5.5 * cm],
+            hAlign="CENTER",
         )
     )
 
