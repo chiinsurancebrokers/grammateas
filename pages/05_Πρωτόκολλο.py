@@ -100,6 +100,22 @@ def save_with_file(data: dict, fbytes=None, fname=None, ftype=None) -> int:
     return save_proto(data)
 
 
+def delete_proto(proto_id: int):
+    conn = get_conn()
+    conn.execute("DELETE FROM πρωτόκολλο WHERE id=?", (proto_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_proto_row(proto_id: int) -> dict:
+    conn = get_conn()
+    cur = conn.execute("SELECT * FROM πρωτόκολλο WHERE id=?", (proto_id,))
+    cols = [d[0] for d in cur.description]
+    row  = cur.fetchone()
+    conn.close()
+    return dict(zip(cols, row)) if row else {}
+
+
 def get_file(proto_id: int):
     conn = get_conn()
     row = conn.execute(
@@ -193,17 +209,71 @@ with tab_list:
                 render_preview(fb, fn, ft)
 
     st.markdown("---")
-    st.subheader("✏️ Ενημέρωση Κατάστασης")
-    c1, c2, c3 = st.columns(3)
-    with c1: pid = st.number_input("ID Εγγραφής", min_value=1, step=1, key="upd_id")
-    with c2: new_st = st.selectbox("Νέα Κατάσταση", ["Εκκρεμές", "Απαντήθηκε", "Αρχειοθετήθηκε"])
-    with c3:
-        st.write("")
-        if st.button("✅ Αποθήκευση", use_container_width=True):
-            save_proto({"id": pid, "κατάσταση": new_st,
-                        "ημ_απάντησης": str(date.today()) if new_st == "Απαντήθηκε" else None})
-            st.success("✅ Ενημερώθηκε!")
-            st.rerun()
+
+    # ── Edit / Delete panel ───────────────────────────────────
+    st.subheader("✏️ Επεξεργασία Εγγραφής")
+    edit_id = st.number_input("ID Εγγραφής για επεξεργασία / διαγραφή",
+                               min_value=1, step=1, key="edit_id")
+
+    col_load, col_del = st.columns([2, 1])
+    with col_load:
+        load_btn = st.button("📂 Φόρτωση για επεξεργασία", use_container_width=True)
+    with col_del:
+        del_btn = st.button("🗑️ Διαγραφή", type="secondary", use_container_width=True)
+
+    if del_btn:
+        delete_proto(int(edit_id))
+        st.success(f"✅ Η εγγραφή {edit_id} διαγράφηκε.")
+        st.rerun()
+
+    if load_btn or st.session_state.get("editing_proto_id") == int(edit_id):
+        row = get_proto_row(int(edit_id))
+        if not row:
+            st.error("Δεν βρέθηκε εγγραφή με αυτό το ID.")
+        else:
+            st.session_state["editing_proto_id"] = int(edit_id)
+            st.markdown(f"**Επεξεργασία ΑΠ {row.get('αρ_πρωτ','')}**")
+
+            with st.form("edit_proto_form"):
+                ec1, ec2, ec3 = st.columns(3)
+                with ec1:
+                    e_αρ   = st.text_input("Αρ. Πρωτ.", value=row.get("αρ_πρωτ",""))
+                    e_ημερ = st.text_input("Ημερομηνία (YYYY-MM-DD)", value=row.get("ημερομηνία",""))
+                with ec2:
+                    dir_opts = ["Εισερχόμενο","Εξερχόμενο"]
+                    dir_idx  = dir_opts.index(row.get("κατεύθυνση","Εισερχόμενο"))                                if row.get("κατεύθυνση") in dir_opts else 0
+                    e_κατ  = st.radio("Κατεύθυνση", dir_opts, index=dir_idx, horizontal=True)
+                    st_opts = ["Εκκρεμές","Απαντήθηκε","Αρχειοθετήθηκε"]
+                    st_idx  = st_opts.index(row.get("κατάσταση","Εκκρεμές"))                                if row.get("κατάσταση") in st_opts else 0
+                    e_st   = st.selectbox("Κατάσταση", st_opts, index=st_idx)
+                with ec3:
+                    e_αποστ = st.text_input("Αποστολέας", value=row.get("αποστολέας","") or "")
+                    e_παραλ = st.text_input("Παραλήπτης", value=row.get("παραλήπτης","") or "")
+
+                e_θέμα   = st.text_input("Θέμα", value=row.get("θέμα","") or "")
+                e_περιγρ = st.text_area("Περιγραφή", value=row.get("περιγραφή","") or "", height=80)
+                e_σχετ   = st.text_input("Σχετικό", value=row.get("αρ_σχετικού","") or "")
+                e_notes  = st.text_area("Παρατηρήσεις", value=row.get("παρατηρήσεις","") or "", height=60)
+
+                if st.form_submit_button("💾 Αποθήκευση αλλαγών", type="primary",
+                                          use_container_width=True):
+                    save_proto({
+                        "id":           int(edit_id),
+                        "αρ_πρωτ":      e_αρ,
+                        "ημερομηνία":   e_ημερ,
+                        "κατεύθυνση":   e_κατ,
+                        "αποστολέας":   e_αποστ,
+                        "παραλήπτης":   e_παραλ,
+                        "θέμα":         e_θέμα,
+                        "περιγραφή":    e_περιγρ,
+                        "αρ_σχετικού":  e_σχετ,
+                        "κατάσταση":    e_st,
+                        "παρατηρήσεις": e_notes,
+                        "ημ_απάντησης": str(date.today()) if e_st == "Απαντήθηκε" else None,
+                    })
+                    st.success(f"✅ Η εγγραφή {edit_id} ενημερώθηκε!")
+                    st.session_state.pop("editing_proto_id", None)
+                    st.rerun()
 
 # ══════════════════════════════════════════════════════════════
 # TAB 2 — ΝΕΑ ΕΓΓΡΑΦΗ (manual)
