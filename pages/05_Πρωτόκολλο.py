@@ -1,17 +1,160 @@
 # -*- coding: utf-8 -*-
 """Σελίδα 05 — Πρωτόκολλο Εγγράφων (Άρθρο 37)"""
 import sys; sys.path.append("..")
+import io, base64, re, json
 import streamlit as st
 from datetime import date
-from modules.database import init_db, get_protokollon, save_proto, next_proto_number
+from modules.database import init_db, get_protokollon, save_proto, next_proto_number, get_conn
 
 init_db()
+
+# ══════════════════════════════════════════════════════════════
+# MIGRATION — προσθήκη columns αρχείου αν δεν υπάρχουν
+# ══════════════════════════════════════════════════════════════
+def _migrate_proto_files():
+    conn = get_conn()
+    for col_def in ["αρχείο_bytes BLOB", "αρχείο_όνομα TEXT", "αρχείο_τύπος TEXT"]:
+        try:
+            conn.execute(f"ALTER TABLE πρωτόκολλο ADD COLUMN {col_def}")
+        except Exception:
+            pass
+    conn.commit()
+    conn.close()
+
+_migrate_proto_files()
+
+
+# ══════════════════════════════════════════════════════════════
+# HELPERS
+# ══════════════════════════════════════════════════════════════
+def get_anthropic_key() -> str:
+    try:
+        return (st.secrets.get("AI", {}).get("ANTHROPIC_API_KEY")
+                or st.secrets.get("ANTHROPIC_API_KEY", ""))
+    except Exception:
+        return ""
+
+
+def extract_text_from_file(file_bytes: bytes, filename: str, mime: str) -> str:
+    """Εξαγωγή κειμένου από PDF ή DOCX."""
+    try:
+        if mime == "application/pdf" or filename.lower().endswith(".pdf"):
+            try:
+                import fitz  # PyMuPDF
+                doc = fitz.open(stream=file_bytes, filetype="pdf")
+                return "\n".join(page.get_text() for page in doc)[:4000]
+            except ImportError:
+                return "[PyMuPDF δεν είναι εγκατεστημένο — pip install pymupdf]"
+        elif "wordprocessingml" in (mime or "") or filename.lower().endswith(".docx"):
+            from docx import Document
+            doc = Document(io.BytesIO(file_bytes))
+            lines = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+            for tbl in doc.tables:
+                for row in tbl.rows:
+                    seen = set()
+                    for cell in row.cells:
+                        cid = id(cell._tc)
+                        if cid not in seen and cell.text.strip():
+                            lines.append(cell.text.strip())
+                            seen.add(cid)
+            return "\n".join(lines)[:4000]
+    except Exception as e:
+        return f"[Σφάλμα εξαγωγής: {e}]"
+    return ""
+
+
+def ai_extract_metadata(text: str, filename: str) -> dict:
+    """Claude εξάγει μεταδεδομένα εγγράφου για αυτόματη συμπλήρωση πρωτοκόλλου."""
+    key = get_anthropic_key()
+    if not key or not text.strip():
+        return {}
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=key)
+        msg = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=600,
+            system="""Εξάγεις μεταδεδομένα εγγράφου για Πρωτόκολλο Τεκτονικής Στοάς.
+Επέστρεψε ΜΟΝΟ έγκυρο JSON (χωρίς markdown backticks):
+{
+  "θέμα": "σύντομος τίτλος ή θέμα εγγράφου (max 120 χαρακτήρες)",
+  "ημερομηνία": "YYYY-MM-DD ή κενό string αν δεν βρεθεί",
+  "αποστολέας": "πλήρες όνομα ή οργανισμός αποστολέα",
+  "παραλήπτης": "πλήρες όνομα ή οργανισμός παραλήπτη",
+  "κατεύθυνση": "Εισερχόμενο ή Εξερχόμενο",
+  "περίληψη": "2-3 γραμμές σύνοψης περιεχομένου"
+}
+Αν κάτι δεν βρεθεί, άφησε το πεδίο ως κενό string.""",
+            messages=[{"role": "user", "content":
+                f"Αρχείο: {filename}\n\nΚείμενο εγγράφου:\n{text[:3000]}"}],
+        )
+        raw = msg.content[0].text.strip()
+        raw = re.sub(r"^```(?:json)?\\s*", "", raw, flags=re.MULTILINE)
+        raw = re.sub(r"\\s*```\\s*$", "", raw, flags=re.MULTILINE).strip()
+        return json.loads(raw)
+    except Exception as e:
+        st.warning(f"⚠️ AI extraction: {e}")
+        return {}
+
+
+def save_proto_with_file(data: dict, file_bytes: bytes = None,
+                          file_name: str = None, file_type: str = None) -> int:
+    """Αποθηκεύει εγγραφή πρωτοκόλλου με προαιρετικό αρχείο."""
+    if file_bytes:
+        data["αρχείο_bytes"] = file_bytes
+        data["αρχείο_όνομα"] = file_name or ""
+        data["αρχείο_τύπος"] = file_type or ""
+    return save_proto(data)
+
+
+def get_proto_file(proto_id: int):
+    """Επιστρέφει bytes + όνομα αρχείου για συγκεκριμένη εγγραφή."""
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT αρχείο_bytes, αρχείο_όνομα, αρχείο_τύπος FROM πρωτόκολλο WHERE id=?",
+        (proto_id,)
+    ).fetchone()
+    conn.close()
+    if row and row[0]:
+        return row[0], row[1], row[2]
+    return None, None, None
+
+
+def render_preview(file_bytes: bytes, filename: str, mime: str):
+    """Προεπισκόπηση αρχείου — PDF με embed, DOCX με text."""
+    if mime == "application/pdf" or filename.lower().endswith(".pdf"):
+        b64 = base64.b64encode(file_bytes).decode()
+        st.markdown(
+            f'<iframe src="data:application/pdf;base64,{b64}" '
+            f'width="100%" height="600px" style="border:1px solid #333;border-radius:8px"></iframe>',
+            unsafe_allow_html=True,
+        )
+    else:
+        text = extract_text_from_file(file_bytes, filename, mime)
+        st.text_area("Περιεχόμενο εγγράφου", value=text, height=400,
+                     disabled=True, key="preview_text_area")
+
+
+# ══════════════════════════════════════════════════════════════
+# PAGE
+# ══════════════════════════════════════════════════════════════
 st.set_page_config(page_title="Πρωτόκολλο", page_icon="📬", layout="wide")
 st.markdown("# 📬 Πρωτόκολλο Εγγράφων")
-st.caption("Άρθρο 37 — Πρωτόκολλο εισερχομένων & εξερχομένων εγγράφων · Διεξαγωγή αλληλογραφίας")
+st.caption(
+    "Άρθρο 37 — Πρωτόκολλο εισερχομένων & εξερχομένων εγγράφων · "
+    "Διεξαγωγή αλληλογραφίας"
+)
 
-tab_list, tab_new = st.tabs(["📋 Πρωτόκολλο", "➕ Νέα Εγγραφή"])
+tab_list, tab_new, tab_upload = st.tabs([
+    "📋 Πρωτόκολλο",
+    "➕ Νέα Εγγραφή",
+    "📎 Ανέβασμα Εγγράφου",
+])
 
+
+# ══════════════════════════════════════════════════════════════
+# TAB 1 — ΛΙΣΤΑ ΠΡΩΤΟΚΟΛΛΟΥ
+# ══════════════════════════════════════════════════════════════
 with tab_list:
     c1, c2, c3, c4 = st.columns(4)
     with c1: year = st.selectbox("Έτος", list(range(date.today().year, 2019, -1)))
@@ -19,62 +162,264 @@ with tab_list:
     with c3: status_f = st.selectbox("Κατάσταση", ["Όλες", "Εκκρεμές", "Απαντήθηκε", "Αρχειοθετήθηκε"])
     with c4: search = st.text_input("🔍 Θέμα")
 
-    df = get_protokollon(year=year, direction="all" if direction=="Όλα" else direction)
-    if status_f != "Όλες": df = df[df["κατάσταση"] == status_f]
-    if search: df = df[df["θέμα"].str.contains(search, case=False, na=False)]
+    df = get_protokollon(year=year, direction="all" if direction == "Όλα" else direction)
+    if status_f != "Όλες":
+        df = df[df["κατάσταση"] == status_f]
+    if search:
+        df = df[df["θέμα"].str.contains(search, case=False, na=False)]
 
-    # Badges
-    ekk = len(df[df["κατάσταση"]=="Εκκρεμές"])
-    if ekk: st.warning(f"⚠️ {ekk} εκκρεμή έγγραφα")
+    ekk = len(df[df["κατάσταση"] == "Εκκρεμές"])
+    if ekk:
+        st.warning(f"⚠️ {ekk} εκκρεμή έγγραφα")
 
     if df.empty:
         st.info("Δεν υπάρχουν εγγραφές.")
     else:
-        st.dataframe(df[["αρ_πρωτ","ημερομηνία","κατεύθυνση","αποστολέας","παραλήπτης","θέμα","κατάσταση"]],
-                     use_container_width=True, hide_index=True)
+        # Εμφάνιση με badge αρχείου
+        show_cols = ["αρ_πρωτ", "ημερομηνία", "κατεύθυνση",
+                     "αποστολέας", "παραλήπτης", "θέμα", "κατάσταση"]
+        if "αρχείο_όνομα" in df.columns:
+            df["📎"] = df["αρχείο_όνομα"].apply(
+                lambda x: "📎" if (x and str(x).strip()) else "")
+            show_cols = ["📎"] + show_cols
+
+        st.dataframe(df[show_cols], use_container_width=True, hide_index=True)
 
     st.markdown("---")
+
+    # ── Λήψη αρχείου / Προεπισκόπηση ─────────────────────────
+    st.subheader("📄 Λήψη & Προεπισκόπηση Αρχείου")
+    col_a, col_b = st.columns([1, 3])
+    with col_a:
+        view_id = st.number_input("ID Εγγραφής", min_value=1, step=1, key="view_id")
+        if st.button("🔍 Φόρτωση αρχείου", use_container_width=True):
+            fbytes, fname, ftype = get_proto_file(int(view_id))
+            if fbytes:
+                st.session_state["preview_bytes"] = fbytes
+                st.session_state["preview_name"] = fname
+                st.session_state["preview_type"] = ftype
+            else:
+                st.warning("Δεν υπάρχει αρχείο για αυτή την εγγραφή.")
+
+    with col_b:
+        if "preview_bytes" in st.session_state:
+            fbytes = st.session_state["preview_bytes"]
+            fname  = st.session_state["preview_name"]
+            ftype  = st.session_state["preview_type"]
+            st.download_button(
+                f"⬇️ Λήψη: {fname}",
+                data=fbytes,
+                file_name=fname,
+                mime=ftype or "application/octet-stream",
+                use_container_width=True,
+            )
+            with st.expander("👁️ Προεπισκόπηση"):
+                render_preview(fbytes, fname, ftype)
+
+    st.markdown("---")
+
+    # ── Ενημέρωση Κατάστασης ──────────────────────────────────
     st.subheader("✏️ Ενημέρωση Κατάστασης")
     c1, c2, c3 = st.columns(3)
-    with c1: pid = st.number_input("ID Εγγραφής", min_value=1, step=1)
-    with c2: new_st = st.selectbox("Νέα Κατάσταση", ["Εκκρεμές","Απαντήθηκε","Αρχειοθετήθηκε"])
+    with c1: pid = st.number_input("ID Εγγραφής", min_value=1, step=1, key="upd_id")
+    with c2: new_st = st.selectbox("Νέα Κατάσταση",
+                                    ["Εκκρεμές", "Απαντήθηκε", "Αρχειοθετήθηκε"])
     with c3:
         st.write("")
         if st.button("✅ Αποθήκευση", use_container_width=True):
             save_proto({"id": pid, "κατάσταση": new_st,
-                        "ημ_απάντησης": str(date.today()) if new_st=="Απαντήθηκε" else None})
-            st.success("✅ Ενημερώθηκε!"); st.rerun()
+                        "ημ_απάντησης": str(date.today()) if new_st == "Απαντήθηκε" else None})
+            st.success("✅ Ενημερώθηκε!")
+            st.rerun()
 
+
+# ══════════════════════════════════════════════════════════════
+# TAB 2 — ΝΕΑ ΕΓΓΡΑΦΗ (manual)
+# ══════════════════════════════════════════════════════════════
 with tab_new:
     st.subheader("➕ Νέα Εγγραφή Πρωτοκόλλου")
-    year_now = date.today().year
-    auto_num = next_proto_number(year_now)
+    year_now  = date.today().year
+    auto_num  = next_proto_number(year_now)
 
     with st.form("new_proto_form"):
         c1, c2, c3 = st.columns(3)
         with c1:
-            αρ = st.text_input("Αριθμός Πρωτοκόλλου", value=auto_num)
+            αρ   = st.text_input("Αριθμός Πρωτοκόλλου", value=auto_num)
             ημερ = st.date_input("Ημερομηνία *", value=date.today())
         with c2:
-            κατ = st.radio("Κατεύθυνση *", ["Εισερχόμενο", "Εξερχόμενο"], horizontal=True)
-            st_val = st.selectbox("Κατάσταση", ["Εκκρεμές","Απαντήθηκε","Αρχειοθετήθηκε"])
+            κατ    = st.radio("Κατεύθυνση *", ["Εισερχόμενο", "Εξερχόμενο"], horizontal=True)
+            st_val = st.selectbox("Κατάσταση", ["Εκκρεμές", "Απαντήθηκε", "Αρχειοθετήθηκε"])
         with c3:
             αποστ = st.text_input("Αποστολέας")
             παραλ = st.text_input("Παραλήπτης")
 
-        θέμα = st.text_input("Θέμα *")
-        περιγρ = st.text_area("Περιγραφή / Σύνοψη", height=80)
-        σχετ = st.text_input("Σχετικό (αρ. πρωτ.)")
-        notes = st.text_area("Παρατηρήσεις", height=60)
+        θέμα    = st.text_input("Θέμα *")
+        περιγρ  = st.text_area("Περιγραφή / Σύνοψη", height=80)
+        σχετ    = st.text_input("Σχετικό (αρ. πρωτ.)")
+        notes   = st.text_area("Παρατηρήσεις", height=60)
+
+        # Προαιρετικό αρχείο στη manual φόρμα
+        attach = st.file_uploader(
+            "📎 Επισύναψη αρχείου (προαιρετικό)",
+            type=["pdf", "docx", "doc"],
+            key="manual_attach",
+        )
 
         if st.form_submit_button("💾 Καταχώρηση", use_container_width=True, type="primary"):
             if not θέμα:
                 st.error("Το θέμα είναι υποχρεωτικό!")
             else:
-                save_proto({
-                    "αρ_πρωτ": αρ, "ημερομηνία": str(ημερ), "κατεύθυνση": κατ,
-                    "αποστολέας": αποστ, "παραλήπτης": παραλ, "θέμα": θέμα,
-                    "περιγραφή": περιγρ, "αρ_σχετικού": σχετ,
-                    "κατάσταση": st_val, "παρατηρήσεις": notes,
-                })
-                st.success(f"✅ Εγγράφηκε με ΑΠ {αρ}!"); st.rerun()
+                fbytes = attach.read() if attach else None
+                fname  = attach.name if attach else None
+                ftype  = attach.type if attach else None
+                save_proto_with_file(
+                    {"αρ_πρωτ": αρ, "ημερομηνία": str(ημερ), "κατεύθυνση": κατ,
+                     "αποστολέας": αποστ, "παραλήπτης": παραλ, "θέμα": θέμα,
+                     "περιγραφή": περιγρ, "αρ_σχετικού": σχετ,
+                     "κατάσταση": st_val, "παρατηρήσεις": notes},
+                    file_bytes=fbytes, file_name=fname, file_type=ftype,
+                )
+                st.success(f"✅ Εγγράφηκε με ΑΠ {αρ}!")
+                st.rerun()
+
+
+# ══════════════════════════════════════════════════════════════
+# TAB 3 — ΑΝΕΒΑΣΜΑ ΕΓΓΡΑΦΟΥ + AI SCRAPING
+# ══════════════════════════════════════════════════════════════
+with tab_upload:
+    st.subheader("📎 Ανέβασμα Εγγράφου & Αυτόματη Πρωτοκόλληση")
+    st.caption(
+        "Ανεβάστε PDF ή DOCX. Το σύστημα εξάγει αυτόματα θέμα, ημερομηνία, "
+        "αποστολέα & παραλήπτη με AI και αποδίδει αριθμό πρωτοκόλλου."
+    )
+
+    uploaded = st.file_uploader(
+        "Επιλέξτε αρχείο (PDF ή DOCX)",
+        type=["pdf", "docx", "doc"],
+        key="upload_doc",
+    )
+
+    if uploaded:
+        file_bytes = uploaded.read()
+        filename   = uploaded.name
+        mime       = uploaded.type
+
+        col_prev, col_form = st.columns([1, 1])
+
+        # ── Προεπισκόπηση ─────────────────────────────────────
+        with col_prev:
+            st.markdown("#### 👁️ Προεπισκόπηση")
+            render_preview(file_bytes, filename, mime)
+
+        # ── Φόρμα πρωτοκόλλησης ──────────────────────────────
+        with col_form:
+            st.markdown("#### 📋 Στοιχεία Πρωτοκόλλου")
+
+            # AI extraction
+            if "ai_meta" not in st.session_state or \
+               st.session_state.get("ai_meta_file") != filename:
+                with st.spinner("🤖 AI εξαγωγή μεταδεδομένων…"):
+                    text = extract_text_from_file(file_bytes, filename, mime)
+                    meta = ai_extract_metadata(text, filename)
+                    st.session_state["ai_meta"]      = meta
+                    st.session_state["ai_meta_file"] = filename
+                    st.session_state["ai_text"]      = text
+            else:
+                meta = st.session_state["ai_meta"]
+
+            if meta:
+                st.success("✅ AI εξαγωγή ολοκληρώθηκε — ελέγξτε & διορθώστε:")
+
+            # Auto protocol number
+            year_now = date.today().year
+            auto_num = next_proto_number(year_now)
+
+            # Κατεύθυνση από AI
+            ai_dir = meta.get("κατεύθυνση", "Εισερχόμενο")
+            dir_idx = 0 if ai_dir == "Εισερχόμενο" else 1
+
+            # Ημερομηνία από AI
+            ai_date = date.today()
+            try:
+                from datetime import datetime
+                if meta.get("ημερομηνία"):
+                    ai_date = datetime.strptime(meta["ημερομηνία"], "%Y-%m-%d").date()
+            except Exception:
+                pass
+
+            with st.form("upload_proto_form"):
+                u_αρ = st.text_input("Αριθμός Πρωτοκόλλου", value=auto_num)
+
+                u_κατ = st.radio(
+                    "Κατεύθυνση *",
+                    ["Εισερχόμενο", "Εξερχόμενο"],
+                    index=dir_idx,
+                    horizontal=True,
+                )
+
+                u_ημερ = st.date_input("Ημερομηνία *", value=ai_date)
+
+                u_αποστ = st.text_input(
+                    "Αποστολέας",
+                    value=meta.get("αποστολέας", ""),
+                )
+                u_παραλ = st.text_input(
+                    "Παραλήπτης",
+                    value=meta.get("παραλήπτης", ""),
+                )
+                u_θέμα = st.text_input(
+                    "Θέμα *",
+                    value=meta.get("θέμα", filename),
+                )
+                u_περιγρ = st.text_area(
+                    "Περιγραφή / Σύνοψη",
+                    value=meta.get("περίληψη", ""),
+                    height=100,
+                )
+                u_σχετ = st.text_input("Σχετικό (αρ. πρωτ.)")
+                u_st   = st.selectbox(
+                    "Κατάσταση",
+                    ["Εκκρεμές", "Απαντήθηκε", "Αρχειοθετήθηκε"],
+                )
+                u_notes = st.text_area("Παρατηρήσεις", height=60)
+
+                submitted = st.form_submit_button(
+                    "💾 Καταχώρηση & Αρχειοθέτηση",
+                    use_container_width=True,
+                    type="primary",
+                )
+
+                if submitted:
+                    if not u_θέμα:
+                        st.error("Το θέμα είναι υποχρεωτικό!")
+                    else:
+                        new_id = save_proto_with_file(
+                            {"αρ_πρωτ": u_αρ,
+                             "ημερομηνία": str(u_ημερ),
+                             "κατεύθυνση": u_κατ,
+                             "αποστολέας": u_αποστ,
+                             "παραλήπτης": u_παραλ,
+                             "θέμα": u_θέμα,
+                             "περιγραφή": u_περιγρ,
+                             "αρ_σχετικού": u_σχετ,
+                             "κατάσταση": u_st,
+                             "παρατηρήσεις": u_notes},
+                            file_bytes=file_bytes,
+                            file_name=filename,
+                            file_type=mime,
+                        )
+                        # Καθαρισμός cache AI
+                        for k in ["ai_meta", "ai_meta_file", "ai_text"]:
+                            st.session_state.pop(k, None)
+
+                        st.success(
+                            f"✅ Αρχείο **{filename}** καταχωρήθηκε "
+                            f"με ΑΠ **{u_αρ}** (ID: {new_id})"
+                        )
+                        st.balloons()
+                        st.rerun()
+
+        # Εμφάνιση raw κειμένου που είδε το AI
+        if st.session_state.get("ai_text"):
+            with st.expander("🔍 Κείμενο που ανέγνωσε το AI"):
+                st.text(st.session_state["ai_text"][:2000])
