@@ -150,8 +150,8 @@ st.set_page_config(page_title="Πρωτόκολλο", page_icon="📬", layout="
 st.markdown("# 📬 Πρωτόκολλο Εγγράφων")
 st.caption("Άρθρο 37 — Πρωτόκολλο εισερχομένων & εξερχομένων εγγράφων · Διεξαγωγή αλληλογραφίας")
 
-tab_list, tab_new, tab_upload = st.tabs([
-    "📋 Πρωτόκολλο", "➕ Νέα Εγγραφή", "📎 Ανέβασμα Εγγράφου"
+tab_list, tab_new, tab_upload, tab_import = st.tabs([
+    "📋 Πρωτόκολλο", "➕ Νέα Εγγραφή", "📎 Ανέβασμα Εγγράφου", "📥 Εισαγωγή CSV"
 ])
 
 # ══════════════════════════════════════════════════════════════
@@ -416,3 +416,120 @@ with tab_upload:
         if st.session_state.get("ai_text"):
             with st.expander("🔍 Κείμενο που ανέγνωσε το AI"):
                 st.text(st.session_state["ai_text"][:2000])
+
+
+# ══════════════════════════════════════════════════════════════
+# TAB 4 — ΕΙΣΑΓΩΓΗ CSV
+# ══════════════════════════════════════════════════════════════
+with tab_import:
+    st.subheader("📥 Εισαγωγή από CSV")
+    st.caption(
+        "Ανεβάστε το CSV που εξάγατε από το πρωτόκολλο. "
+        "Οι εγγραφές εισάγονται μόνο αν δεν υπάρχει ήδη ο ίδιος αρ. πρωτοκόλλου."
+    )
+
+    csv_file = st.file_uploader("Επιλέξτε CSV αρχείο", type=["csv"], key="import_csv")
+
+    if csv_file:
+        import pandas as pd
+        try:
+            df_csv = pd.read_csv(csv_file, encoding="utf-8-sig")
+            # Καθαρισμός στήλης 📎 αν υπάρχει
+            if "📎" in df_csv.columns:
+                df_csv = df_csv.drop(columns=["📎"])
+
+            st.markdown(f"**{len(df_csv)} εγγραφές βρέθηκαν στο CSV**")
+            st.dataframe(df_csv.head(10), use_container_width=True, hide_index=True)
+
+            col_imp, col_skip = st.columns(2)
+            with col_imp:
+                overwrite = st.checkbox("Αντικατάσταση αν υπάρχει ήδη ο ΑΠ", value=False)
+            with col_skip:
+                st.info("Χωρίς αντικατάσταση: παραλείπονται διπλότυπα")
+
+            if st.button("📥 Εισαγωγή εγγραφών", type="primary", use_container_width=True):
+                conn = get_conn()
+                inserted = 0
+                skipped  = 0
+                updated  = 0
+
+                for _, row in df_csv.iterrows():
+                    αρ = str(row.get("αρ_πρωτ", "")).strip()
+                    if not αρ:
+                        skipped += 1
+                        continue
+
+                    # Έλεγχος αν υπάρχει ήδη
+                    existing = conn.execute(
+                        "SELECT id FROM πρωτόκολλο WHERE αρ_πρωτ=?", (αρ,)
+                    ).fetchone()
+
+                    record = {
+                        "αρ_πρωτ":     αρ,
+                        "ημερομηνία":  str(row.get("ημερομηνία", "")).strip(),
+                        "κατεύθυνση":  str(row.get("κατεύθυνση", "Εισερχόμενο")).strip(),
+                        "αποστολέας":  str(row.get("αποστολέας", "") or "").strip(),
+                        "παραλήπτης":  str(row.get("παραλήπτης", "") or "").strip(),
+                        "θέμα":        str(row.get("θέμα", "") or "").strip() or "—",
+                        "περιγραφή":   str(row.get("περιγραφή", "") or "").strip(),
+                        "αρ_σχετικού": str(row.get("αρ_σχετικού", "") or "").strip(),
+                        "κατάσταση":   str(row.get("κατάσταση", "Εκκρεμές")).strip(),
+                        "παρατηρήσεις":str(row.get("παρατηρήσεις", "") or "").strip(),
+                    }
+
+                    if existing:
+                        if overwrite:
+                            fields = ", ".join(f"{k}=?" for k in record)
+                            conn.execute(
+                                f"UPDATE πρωτόκολλο SET {fields} WHERE id=?",
+                                (*record.values(), existing[0])
+                            )
+                            updated += 1
+                        else:
+                            skipped += 1
+                    else:
+                        cols = ", ".join(record.keys())
+                        phs  = ", ".join("?" * len(record))
+                        conn.execute(
+                            f"INSERT INTO πρωτόκολλο ({cols}) VALUES ({phs})",
+                            list(record.values())
+                        )
+                        inserted += 1
+
+                conn.commit()
+                conn.close()
+
+                st.success(
+                    f"✅ Ολοκληρώθηκε — "
+                    f"**{inserted}** νέες | "
+                    f"**{updated}** ενημερώθηκαν | "
+                    f"**{skipped}** παραλείφθηκαν"
+                )
+                st.rerun()
+
+        except Exception as e:
+            st.error(f"❌ Σφάλμα ανάγνωσης CSV: {e}")
+
+    st.markdown("---")
+    st.subheader("📤 Εξαγωγή σε CSV")
+    st.caption("Κατεβάστε όλο το πρωτόκολλο σε CSV για backup ή επαναφόρτωση.")
+
+    year_exp = st.selectbox("Έτος", ["Όλα"] + list(range(date.today().year, 2019, -1)),
+                             key="export_year")
+    if st.button("📤 Εξαγωγή", use_container_width=True):
+        import pandas as pd
+        df_exp = get_protokollon(
+            year=None if year_exp == "Όλα" else int(year_exp)
+        )
+        # Remove BLOB column for CSV
+        for col in ["αρχείο_bytes", "αρχείο_όνομα", "αρχείο_τύπος"]:
+            if col in df_exp.columns:
+                df_exp = df_exp.drop(columns=[col])
+        csv_data = df_exp.to_csv(index=False, encoding="utf-8-sig")
+        st.download_button(
+            "⬇️ Λήψη CSV",
+            data=csv_data.encode("utf-8-sig"),
+            file_name=f"πρωτόκολλο_{year_exp}_{date.today()}.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
