@@ -30,6 +30,10 @@ DB_PATH = os.environ.get("DB_PATH", "grammateas.db")
 
 
 def get_conn() -> sqlite3.Connection:
+    # Δημιουργία φακέλου αν δεν υπάρχει (π.χ. /data στο Railway)
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
