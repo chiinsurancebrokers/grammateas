@@ -34,9 +34,6 @@ from modules.database import (
     init_db, get_all_members, get_member, get_members_dropdown,
 )
 
-# ══════════════════════════════════════════════════════════════
-# APP SETUP
-# ══════════════════════════════════════════════════════════════
 init_db()
 
 st.set_page_config(
@@ -52,10 +49,17 @@ st.caption(
 )
 
 # ══════════════════════════════════════════════════════════════
-# ΣΤΑΘΕΡΕΣ — ΔΙΑΔΙΚΑΣΙΕΣ
+# ΣΤΑΘΕΡΕΣ
 # ══════════════════════════════════════════════════════════════
 FORMS_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "forms")
 
+STOAA_NAME    = "ΑΚΡΟΠΟΛΙΣ"
+STOAA_NUMBER  = "84"
+STOAA_ANATOLI = "Αθηνών"
+
+# ══════════════════════════════════════════════════════════════
+# ΔΙΑΔΙΚΑΣΙΕΣ
+# ══════════════════════════════════════════════════════════════
 DIKADIKASIEES: Dict[str, Dict] = {
 
     "📥 Εισδοχή Υποψηφίου": {
@@ -67,24 +71,17 @@ DIKADIKASIEES: Dict[str, Dict] = {
         ),
         "deadline_note": "⏱️ Εντός 8 μηνών από έγκριση ΜΣΤ πρέπει να γίνει η μύηση (άρ. 105).",
         "steps": [
-            ("1", "Απαιτούμενα έντυπα", [
-                "Βιογραφικό Σημείωμα υποψηφίου",
-                "Συστατική Δήλωση προτείνοντος Διδασκάλου (Αναδόχου)",
-                "Αίτηση Εισδοχής υποψηφίου",
-                "Υπεύθυνη Δήλωση υποψηφίου",
-                "Εμπιστευτική Έκθεση εντεταλμένου Διδ (×3)",
-                "2+2 φωτογραφίες (έγχρωμες, σακάκι & γραβάτα)",
-            ]),
-            ("2", "Υποβολή Συστατικής Δήλωσης & Βιογραφικού στη Στοά", ["Άρ. 95§1"]),
-            ("3", "Ερώτηση στη Μεγ. Γεν. Γραμματεία για ιδιαίτερη κατάσταση", ["Άρ. 95§3"]),
-            ("4", "Απόφαση Συμβουλίου Αξιωμ. εντός 1 μηνός", ["Άρ. 95§2 · Κ.Χ. 13"]),
-            ("5", "Υποβολή Αίτησης Εισδοχής + Υπεύθυνης Δήλωσης (Σάκος Προτάσεων)", ["Άρ. 95§4 & 96"]),
-            ("6", "Ανάγνωση Αίτησης & κατ' αρχήν φανερή ψηφοφορία", ["Άρ. 97§1 & 2"]),
+            ("1",  "Απαιτούμενα έντυπα", ["• Βιογραφικό Σημείωμα υποψηφίου", "• Συστατική Δήλωση προτείνοντος Διδασκάλου (Αναδόχου)", "• Αίτηση Εισδοχής υποψηφίου", "• Υπεύθυνη Δήλωση υποψηφίου", "• Εμπιστευτική Έκθεση εντεταλμένου Διδ (×3)", "• 2+2 φωτογραφίες (έγχρωμες, σακάκι & γραβάτα)"]),
+            ("2",  "Υποβολή Συστατικής Δήλωσης & Βιογραφικού στη Στοά", ["Άρ. 95§1"]),
+            ("3",  "Ερώτηση στη Μεγ. Γεν. Γραμματεία για ιδιαίτερη κατάσταση", ["Άρ. 95§3"]),
+            ("4",  "Απόφαση Συμβουλίου Αξιωμ. εντός 1 μηνός", ["Άρ. 95§2 · Κ.Χ. 13"]),
+            ("5",  "Υποβολή Αίτησης Εισδοχής + Υπεύθυνης Δήλωσης (Σάκος Προτάσεων)", ["Άρ. 95§4 & 96"]),
+            ("6",  "Ανάγνωση Αίτησης & κατ' αρχήν φανερή ψηφοφορία", ["Άρ. 97§1 & 2"]),
             ("7α", "Ανάθεση σε 3 Διδ. για εμπιστ. πληρ. (εντός 7 ημ.) — έκθεση εντός 20 ημ.", ["Άρ. 97§2-4"]),
             ("7β", "Αίτηση προς λοιπές Στοές για πληροφορίες (εντός 1 μηνός)", ["Άρ. 97§4"]),
             ("7γ", "Ανάρτηση πίνακα με φωτογραφία στον Πρόναο (επί 1 μήνα)", ["Άρ. 98§1 & 2"]),
-            ("8", "1 μήνα μετά: ανάγνωση 3 εκθέσεων & μυστική ψηφοφορία (σφαιρίδια)", ["Άρ. 100§1-4"]),
-            ("9", "Αν αρνητικό: αποστολή ανακοίνωσης στη Μεγ. Γεν. Γραμματεία", ["Άρ. 100§3-4"]),
+            ("8",  "1 μήνα μετά: ανάγνωση 3 εκθέσεων & μυστική ψηφοφορία (σφαιρίδια)", ["Άρ. 100§1-4"]),
+            ("9",  "Αν αρνητικό: αποστολή ανακοίνωσης στη Μεγ. Γεν. Γραμματεία", ["Άρ. 100§3-4"]),
             ("10", "Αν θετικό: υποβολή πλήρους φακέλου στη Μεγ. Γεν. Γραμματεία", ["Άρ. 104§1"]),
             ("11", "Μεγ. Γεν. Γραμμ. εκδίδει Εγκριτικό Πίνακα Εισδοχής", []),
             ("12", "Μετά τη Μύηση: αποστολή αποκόμματος Αναγγελίας Εισδοχής", []),
@@ -110,38 +107,38 @@ DIKADIKASIEES: Dict[str, Dict] = {
             {
                 "title": "👤 Στοιχεία Υποψηφίου",
                 "fields": [
-                    ("yp_eponimo",   "Επώνυμο",             "text",   ""),
-                    ("yp_onoma",     "Όνομα",               "text",   ""),
-                    ("yp_patronimo", "Πατρώνυμο",           "text",   ""),
-                    ("yp_mitronimo", "Μητρώνυμο",           "text",   ""),
-                    ("yp_gennisi",   "Ημ/νία Γέννησης",     "date",   ""),
-                    ("yp_topos",     "Τόπος Γέννησης",      "text",   ""),
-                    ("yp_epaggelma", "Επάγγελμα",           "text",   ""),
-                    ("yp_diefthinsi","Διεύθυνση Κατοικίας", "text",   ""),
-                    ("yp_poli",      "Πόλη",                "text",   "Αθήνα"),
-                    ("yp_tilefono",  "Τηλέφωνο",            "text",   ""),
-                    ("yp_kinito",    "Κινητό",              "text",   ""),
-                    ("yp_email",     "Email",               "text",   ""),
-                    ("yp_adt",       "Α.Δ.Τ. / Διαβατήριο","text",   ""),
-                    ("yp_afm",       "Α.Φ.Μ.",              "text",   ""),
+                    ("yp_eponimo",    "Επώνυμο",             "text",   ""),
+                    ("yp_onoma",      "Όνομα",               "text",   ""),
+                    ("yp_patronimo",  "Πατρώνυμο",           "text",   ""),
+                    ("yp_mitronimo",  "Μητρώνυμο",           "text",   ""),
+                    ("yp_gennisi",    "Ημ/νία Γέννησης",     "date",   ""),
+                    ("yp_topos",      "Τόπος Γέννησης",      "text",   ""),
+                    ("yp_epaggelma",  "Επάγγελμα",           "text",   ""),
+                    ("yp_diefthinsi", "Διεύθυνση Κατοικίας", "text",   ""),
+                    ("yp_poli",       "Πόλη",                "text",   "Αθήνα"),
+                    ("yp_tilefono",   "Τηλέφωνο",            "text",   ""),
+                    ("yp_kinito",     "Κινητό",              "text",   ""),
+                    ("yp_email",      "Email",               "text",   ""),
+                    ("yp_adt",        "Α.Δ.Τ. / Διαβατήριο","text",   ""),
+                    ("yp_afm",        "Α.Φ.Μ.",              "text",   ""),
                     ("yp_oikogeneiaki","Οικογενειακή Κατάσταση","text",""),
                 ],
             },
             {
                 "title": "🤝 Στοιχεία Αναδόχου Διδασκάλου",
                 "fields": [
-                    ("an_eponimo",   "Επώνυμο Αναδόχου",   "member", ""),
-                    ("an_onoma",     "Όνομα",               "auto",   ""),
-                    ("an_arith",     "Αρ. Μητρώου Στοάς",  "auto",   ""),
+                    ("an_eponimo", "Επώνυμο Αναδόχου",  "member", ""),
+                    ("an_onoma",   "Όνομα",              "auto",   ""),
+                    ("an_arith",   "Αρ. Μητρώου Στοάς", "auto",   ""),
                 ],
             },
             {
                 "title": "📋 Στοιχεία Στοάς & Διαδικασίας",
                 "fields": [
-                    ("st_sev",       "Σεβάσμιος",          "member", ""),
-                    ("st_gramm",     "Γραμματεύς",         "member", ""),
-                    ("st_imerominia_synedrias", "Ημ/νία Συνεδρίας", "date", ""),
-                    ("st_arithos_protokollou",  "Αρ. Πρωτοκόλλου", "text",  ""),
+                    ("st_sev",                "Σεβάσμιος",          "member", ""),
+                    ("st_gramm",              "Γραμματεύς",         "member", ""),
+                    ("st_imerominia_synedrias","Ημ/νία Συνεδρίας",  "date",   ""),
+                    ("st_arithos_protokollou","Αρ. Πρωτοκόλλου",   "text",   ""),
                 ],
             },
         ],
@@ -181,32 +178,32 @@ DIKADIKASIEES: Dict[str, Dict] = {
             {
                 "title": "👤 Στοιχεία Υποψηφίου",
                 "fields": [
-                    ("yp_melos",     "Μέλος (Υποψήφιος)",  "member", ""),
-                    ("yp_eponimo",   "Επώνυμο",             "auto",   ""),
-                    ("yp_onoma",     "Όνομα",               "auto",   ""),
-                    ("yp_arith",     "Αρ. Μητρώου Στοάς",  "auto",   ""),
-                    ("yp_arith_ms",  "Αρ. Μητρώου ΜΣ",     "auto",   ""),
-                    ("yp_im_mithsis","Ημ/νία Μύησης (Μαθ.)","auto",  ""),
-                    ("yp_par_synedrion","Αριθμός παρουσιών","number", ""),
-                    ("yp_synolikoi","Συν. συνεδρίες Μαθητού","number",""),
+                    ("yp_melos",        "Μέλος (Υποψήφιος)",     "member", ""),
+                    ("yp_eponimo",      "Επώνυμο",               "auto",   ""),
+                    ("yp_onoma",        "Όνομα",                 "auto",   ""),
+                    ("yp_arith",        "Αρ. Μητρώου Στοάς",    "auto",   ""),
+                    ("yp_arith_ms",     "Αρ. Μητρώου ΜΣ",       "auto",   ""),
+                    ("yp_im_mithsis",   "Ημ/νία Μύησης (Μαθ.)", "auto",   ""),
+                    ("yp_par_synedrion","Αριθμός παρουσιών",     "number", ""),
+                    ("yp_synolikoi",    "Συν. συνεδρίες Μαθητού","number", ""),
                 ],
             },
             {
                 "title": "✍️ Προτείνοντες Διδάσκαλοι",
                 "fields": [
-                    ("pr1_melos",    "1ος Προτείνων",       "member", ""),
-                    ("pr2_melos",    "2ος Προτείνων",       "member", ""),
+                    ("pr1_melos", "1ος Προτείνων", "member", ""),
+                    ("pr2_melos", "2ος Προτείνων", "member", ""),
                 ],
             },
             {
                 "title": "📋 Στοιχεία Στοάς",
                 "fields": [
-                    ("st_sev",       "Σεβάσμιος",          "member", ""),
-                    ("st_gramm",     "Γραμματεύς",         "member", ""),
-                    ("st_imerominia","Ημ/νία Συνεδρίας",   "date",   ""),
-                    ("st_psifoi_yper","Ψήφοι υπέρ",        "number", ""),
-                    ("st_psifoi_kata","Ψήφοι κατά",        "number", ""),
-                    ("st_paronton",  "Παρόντες (αριθμός)", "number", ""),
+                    ("st_sev",         "Σεβάσμιος",        "member", ""),
+                    ("st_gramm",       "Γραμματεύς",       "member", ""),
+                    ("st_imerominia",  "Ημ/νία Συνεδρίας", "date",   ""),
+                    ("st_psifoi_yper", "Ψήφοι υπέρ",       "number", ""),
+                    ("st_psifoi_kata", "Ψήφοι κατά",       "number", ""),
+                    ("st_paronton",    "Παρόντες (αριθμός)","number", ""),
                 ],
             },
         ],
@@ -219,26 +216,31 @@ DIKADIKASIEES: Dict[str, Dict] = {
 
     "🗳️ Εκλογές Αξιωματικών & Εγκατάσταση": {
         "code": "ekloges",
-        "subtitle": "Άρθρα 73–86 Γ.Κ.",
+        "subtitle": "Άρθρα 73–88 Γ.Κ.",
         "description": (
             "Εκλογή Σεβασμίου, Συμβουλίου Αξιωματικών & Αντιπροσώπων. "
-            "Υποβολή εντύπων στη Μεγ. Γεν. Γραμματεία εντός 10 ημερών."
+            "Υποβολή εντύπων 1–5 εντός 10 ημερών. "
+            "Μετά τον Εγκριτικό Πίνακα: αίτηση ημερομηνίας εγκατάστασης "
+            "και αναγγελία εγκατάστασης (έντυπα 6 & 7)."
         ),
-        "deadline_note": "⏱️ Εντός 10 ημερών από αρχαιρεσίες υποβολή (άρ. 85§2). Εντός Οκτωβρίου.",
+        "deadline_note": (
+            "⏱️ Εντός 10 ημερών από αρχαιρεσίες υποβολή εντύπων 1-5 (άρ. 85§2). "
+            "Εντός 30 ημερών από Εγκριτικό Πίνακα: αίτηση εγκατάστασης (άρ. 88)."
+        ),
         "steps": [
-            ("1", "Ελέγχος εκλογέων (1/3 παρουσιών τελευταίας διετίας)", ["Άρ. 73§2 & 128"]),
-            ("2", "Ελέγχος εκλεξίμων (αρ. 73, 74 — ειδικές προϋποθέσεις για Σεβάσμιο)", ["Άρ. 73, 74"]),
-            ("3", "Συνεδρία Μέσου Δώματος — παρουσία ≥ 1/2+1 Διδ. με δικ. ψήφου", ["Άρ. 73§3 & 138"]),
-            ("4", "Εκλογή Σεβασμίου (1η ψηφοφορία)", ["Άρ. 77-83"]),
-            ("5", "Εκλογή Α' & Β' Εποπτών", ["Άρ. 77"]),
-            ("6", "Εκλογή λοιπών Αξιωματικών & Εξελεγκτικής Επιτροπής", ["Άρ. 77"]),
-            ("7", "Τυχόν εκλογή Αντιπροσώπων (συμπίπτει ή χωριστά)", ["Άρ. 80 & 81§5"]),
-            ("8", "Ανακοίνωση αποτελεσμάτων — επευφημία Στοάς", ["Άρ. 82"]),
-            ("9", "Εντός 10 ημ.: υποβολή εντύπων α–ε στη Μεγ. Γεν. Γραμμ.", ["Άρ. 85§2"]),
-            ("10","Εντός 15 Οκτωβρίου: Διοικητικός & Οικον. Απολογισμός", []),
-            ("11","Μεγ. Στοά εγκρίνει — έκδοση Εγκριτικών Πινάκων", ["Άρ. 86"]),
-            ("12","Αίτηση ημερομηνίας εγκατάστασης (εντός 30 ημ. από έγκριση)", ["Άρ. 88"]),
-            ("13","Εγκατάσταση νέων Αρχών — αναγγελία στη Μεγ. Γεν. Γραμμ.", []),
+            ("1",  "Ελέγχος εκλογέων (1/3 παρουσιών τελευταίας διετίας)", ["Άρ. 73§2 & 128"]),
+            ("2",  "Ελέγχος εκλεξίμων (αρ. 73, 74 — ειδικές προϋποθέσεις για Σεβάσμιο)", ["Άρ. 73, 74"]),
+            ("3",  "Συνεδρία Μέσου Δώματος — παρουσία ≥ 1/2+1 Διδ. με δικ. ψήφου", ["Άρ. 73§3 & 138"]),
+            ("4",  "Εκλογή Σεβασμίου (1η ψηφοφορία)", ["Άρ. 77-83"]),
+            ("5",  "Εκλογή Α' & Β' Εποπτών", ["Άρ. 77"]),
+            ("6",  "Εκλογή λοιπών Αξιωματικών & Εξελεγκτικής Επιτροπής", ["Άρ. 77"]),
+            ("7",  "Τυχόν εκλογή Αντιπροσώπων (συμπίπτει ή χωριστά)", ["Άρ. 80 & 81§5"]),
+            ("8",  "Ανακοίνωση αποτελεσμάτων — επευφημία Στοάς", ["Άρ. 82"]),
+            ("9",  "Εντός 10 ημ.: υποβολή εντύπων 1–5 στη Μεγ. Γεν. Γραμμ.", ["Άρ. 85§2"]),
+            ("10", "Εντός 15 Οκτωβρίου: Διοικητικός & Οικον. Απολογισμός", []),
+            ("11", "Μεγ. Στοά εγκρίνει — έκδοση Εγκριτικών Πινάκων", ["Άρ. 86"]),
+            ("12", "Αίτηση ημερομηνίας εγκατάστασης εντός 30 ημ. (έντυπο 6)", ["Άρ. 88"]),
+            ("13", "Εγκατάσταση νέων Αρχών — αναγγελία στη Μεγ. Γεν. Γραμμ. (έντυπο 7)", []),
         ],
         "forms": [
             {"name": "1. Αναγγελία Εκλογής Σεβασμίου & Συμβουλίου",
@@ -256,53 +258,59 @@ DIKADIKASIEES: Dict[str, Dict] = {
             {"name": "5. Ονομαστική Κατάσταση Ψηφισάντων",
              "file": "ekloges/5_-_ΟΝΟΜΑΣΤΙΚΗ_ΚΑΤΑΣΤΑΣΗ_ΨΗΦΙΣΑΝΤΩΝ.docx",
              "description": "Κατάλογος Διδ. που ψήφισαν"},
+            {"name": "6. Αίτηση Ορισμού Ημερομηνίας Εγκατάστασης",
+             "file": "ekloges/6_-_ΑΙΤΗΣΗ_ΕΓΚΑΤΑΣΤΑΣΗΣ.docx",
+             "description": "Επίσημη επιστολή αίτησης εγκατάστασης (εντός 30 ημ.)"},
+            {"name": "7. Αναγγελία Εγκατάστασης Σεβ. & Συμβουλίου",
+             "file": "ekloges/7.- ΑΝΑΓΓΕΛΙΑ ΕΓΚΑΤΑΣΤΑΣΕΩΣ ΣΕΒΑΣΜΙΟΥ & ΣΥΜΒΟΥΛΙΟΥ.docx",
+             "description": "Αναγγελία εγκατάστασης νέων αξιωματικών (μετά τον Εγκριτικό Πίνακα)"},
         ],
         "input_groups": [
             {
                 "title": "🏛️ Νέο Συμβούλιο Αξιωματικών",
                 "fields": [
-                    ("ax_sev",    "Σεβάσμιος",             "member", ""),
-                    ("ax_a_ep",   "Α' Επόπτης",            "member", ""),
-                    ("ax_b_ep",   "Β' Επόπτης",            "member", ""),
-                    ("ax_rhtor",  "Ρήτωρ",                 "member", ""),
-                    ("ax_gramm",  "Γραμματεύς-Σφραγιδοφύλαξ","member",""),
-                    ("ax_tamias", "Ταμίας",                "member", ""),
-                    ("ax_eleon",  "Ελεονόμος",             "member", ""),
-                    ("ax_tel",    "Τελετάρχης",            "member", ""),
-                    ("ax_steg",   "Στεγαστής",             "member", ""),
-                    ("ax_a_dok",  "Α' Δοκιμαστής",         "member", ""),
-                    ("ax_b_dok",  "Β' Δοκιμαστής",         "member", ""),
-                    ("ax_arxitekt","Αρχιτέκτων-Αρχιτρίκλινος","member",""),
-                    ("ax_arxif",  "Αρχειοφύλαξ-Βιβλιοφύλαξ","member",""),
-                    ("ax_xifok",  "Ξιφοφόρος-Σηματοφόρος",  "member", ""),
+                    ("ax_sev",     "Σεβάσμιος",                     "member", ""),
+                    ("ax_a_ep",    "Α' Επόπτης",                    "member", ""),
+                    ("ax_b_ep",    "Β' Επόπτης",                    "member", ""),
+                    ("ax_rhtor",   "Ρήτωρ",                         "member", ""),
+                    ("ax_gramm",   "Γραμματεύς-Σφραγιδοφύλαξ",      "member", ""),
+                    ("ax_tamias",  "Ταμίας",                        "member", ""),
+                    ("ax_eleon",   "Ελεονόμος",                     "member", ""),
+                    ("ax_tel",     "Τελετάρχης",                    "member", ""),
+                    ("ax_steg",    "Στεγαστής",                     "member", ""),
+                    ("ax_a_dok",   "Α' Δοκιμαστής",                 "member", ""),
+                    ("ax_b_dok",   "Β' Δοκιμαστής",                 "member", ""),
+                    ("ax_arxitekt","Αρχιτέκτων-Αρχιτρίκλινος",      "member", ""),
+                    ("ax_arxif",   "Αρχειοφύλαξ-Βιβλιοφύλαξ",      "member", ""),
+                    ("ax_xifok",   "Ξιφοφόρος-Σηματοφόρος",         "member", ""),
                 ],
             },
             {
                 "title": "➕ Πρόσθετοι Αξιωματικοί (αν υπάρχουν)",
                 "fields": [
-                    ("pr_rhtor",  "Πρόσθ. Ρήτωρ",          "member", ""),
-                    ("pr_gramm",  "Πρόσθ. Γραμματεύς",     "member", ""),
-                    ("pr_tamias", "Πρόσθ. Ταμίας",          "member", ""),
-                    ("pr_eleon",  "Πρόσθ. Ελεονόμος",       "member", ""),
-                    ("pr_tel",    "Πρόσθ. Τελετάρχης",      "member", ""),
+                    ("pr_rhtor",  "Πρόσθ. Ρήτωρ",       "member", ""),
+                    ("pr_gramm",  "Πρόσθ. Γραμματεύς",  "member", ""),
+                    ("pr_tamias", "Πρόσθ. Ταμίας",       "member", ""),
+                    ("pr_eleon",  "Πρόσθ. Ελεονόμος",    "member", ""),
+                    ("pr_tel",    "Πρόσθ. Τελετάρχης",   "member", ""),
                 ],
             },
             {
                 "title": "🗓️ Στοιχεία Αρχαιρεσιών",
                 "fields": [
-                    ("ekl_imerominia", "Ημ/νία Αρχαιρεσιών",   "date",   ""),
-                    ("ekl_dikaiom",    "Εκλογείς (αριθμός)",    "number", ""),
-                    ("ekl_paronton",   "Παρόντες κατά εκλογή",  "number", ""),
-                    ("ekl_psifisantes","Ψηφίσαντες",            "number", ""),
-                    ("ekl_diettia",    "Τεκτονική Διετία",      "text",   "2024-2026"),
+                    ("ekl_imerominia",  "Ημ/νία Αρχαιρεσιών",   "date",   ""),
+                    ("ekl_dikaiom",     "Εκλογείς (αριθμός)",    "number", ""),
+                    ("ekl_paronton",    "Παρόντες κατά εκλογή",  "number", ""),
+                    ("ekl_psifisantes", "Ψηφίσαντες",            "number", ""),
+                    ("ekl_diettia",     "Τεκτονική Διετία",      "text",   "2024-2026"),
                 ],
             },
             {
                 "title": "📊 Εξελεγκτική Επιτροπή",
                 "fields": [
-                    ("ex_1", "1ο Μέλος",  "member", ""),
-                    ("ex_2", "2ο Μέλος",  "member", ""),
-                    ("ex_3", "3ο Μέλος",  "member", ""),
+                    ("ex_1", "1ο Μέλος", "member", ""),
+                    ("ex_2", "2ο Μέλος", "member", ""),
+                    ("ex_3", "3ο Μέλος", "member", ""),
                 ],
             },
             {
@@ -311,9 +319,20 @@ DIKADIKASIEES: Dict[str, Dict] = {
                     ("psifisantes_multiselect", "Ψηφίσαντες", "multiselect_members", ""),
                 ],
             },
+            {
+                "title": "📅 Εγκατάσταση Νέων Αξιωματικών",
+                "fields": [
+                    ("egkat_imerominia", "Ημ/νία Εγκατάστασης",       "date",   ""),
+                    ("egkat_egk_proto",  "Αρ. Πρωτ. Εγκριτικού Πίνακα","text",  ""),
+                    ("egkat_egk_im",     "Ημ/νία Εγκριτικού Πίνακα",  "date",   ""),
+                    ("emvolimes", "Τύπος Εκλογών", "select",
+                     ["Τακτικές εκλογές (Οκτώβριος)", "Εμβόλιμες εκλογές"]),
+                    ("emvolimes_logos", "Λόγος εμβόλιμων εκλογών (αν εφαρμόζεται)", "textarea", ""),
+                ],
+            },
         ],
         "claude_hint": (
-            "Εκλογές Αξιωματικών Τεκτονικής Στοάς. Βάσει άρθρων 73-86 Γεν. Κανονισμού ΜΣΤΕ. "
+            "Εκλογές Αξιωματικών Τεκτονικής Στοάς. Βάσει άρθρων 73-88 Γεν. Κανονισμού ΜΣΤΕ. "
             "Η εκλογή γίνεται ανά διετία με μυστική δια ψηφοδελτίων ψηφοφορία. "
             "Χρησιμοποίησε επίσημη τεκτονική γλώσσα και συντομογραφίες."
         ),
@@ -342,12 +361,12 @@ DIKADIKASIEES: Dict[str, Dict] = {
             {
                 "title": "👤 Στοιχεία Μέλους",
                 "fields": [
-                    ("melos",        "Μέλος",               "member", ""),
-                    ("eponimo",      "Επώνυμο",             "auto",   ""),
-                    ("onoma",        "Όνομα",               "auto",   ""),
-                    ("arith_stoias", "Αρ. Μητρώου Στοάς",  "auto",   ""),
-                    ("arith_ms",     "Αρ. Μητρώου ΜΣ",     "auto",   ""),
-                    ("vathmος",      "Τεκτονικός Βαθμός",  "auto",   ""),
+                    ("melos",        "Μέλος",              "member", ""),
+                    ("eponimo",      "Επώνυμο",            "auto",   ""),
+                    ("onoma",        "Όνομα",              "auto",   ""),
+                    ("arith_stoias", "Αρ. Μητρώου Στοάς", "auto",   ""),
+                    ("arith_ms",     "Αρ. Μητρώου ΜΣ",    "auto",   ""),
+                    ("vathmος",      "Τεκτονικός Βαθμός", "auto",   ""),
                 ],
             },
             {
@@ -358,7 +377,7 @@ DIKADIKASIEES: Dict[str, Dict] = {
                       "Αναστολή Δικαιωμάτων", "Επαναφορά σε Ενεργό",
                       "Αλλαγή Στοιχείων", "Άλλη μεταβολή"]),
                     ("imerominia_metavolis", "Ημ/νία Μεταβολής", "date", ""),
-                    ("perigrafh",    "Περιγραφή / Παρατηρήσεις", "textarea", ""),
+                    ("perigrafh", "Περιγραφή / Παρατηρήσεις", "textarea", ""),
                 ],
             },
             {
@@ -400,20 +419,20 @@ DIKADIKASIEES: Dict[str, Dict] = {
             {
                 "title": "🏛️ Συνεργαζόμενες Στοές",
                 "fields": [
-                    ("stoaa_name",  "Στοά Α (η αιτούσα)",    "text", "ΑΚΡΟΠΟΛΙΣ 84"),
-                    ("stoab_name",  "Στοά Β",                "text", ""),
-                    ("stoac_name",  "Στοά Γ (αν υπάρχει)",   "text", ""),
+                    ("stoaa_name", "Στοά Α (η αιτούσα)", "text", "ΑΚΡΟΠΟΛΙΣ 84"),
+                    ("stoab_name", "Στοά Β",             "text", ""),
+                    ("stoac_name", "Στοά Γ (αν υπάρχει)","text", ""),
                 ],
             },
             {
                 "title": "📅 Στοιχεία Συνεδρίας",
                 "fields": [
-                    ("syn_imerominia",  "Ημ/νία Κοινής Συνεδρίας", "date",   ""),
-                    ("syn_ora",         "Ώρα",                     "text",   "20:00"),
-                    ("syn_topos",       "Τόπος",                   "text",   "Τεκτ. Ναός"),
-                    ("syn_vathmος",     "Βαθμός Εργασιών",         "select", ["Μαθητού", "Εταίρου", "Διδασκάλου"]),
-                    ("syn_omilitis",    "Ομιλητής",                "member", ""),
-                    ("syn_thema",       "Θέμα Ομιλίας",            "textarea",""),
+                    ("syn_imerominia", "Ημ/νία Κοινής Συνεδρίας", "date",   ""),
+                    ("syn_ora",        "Ώρα",                     "text",   "20:00"),
+                    ("syn_topos",      "Τόπος",                   "text",   "Τεκτ. Ναός"),
+                    ("syn_vathmος",    "Βαθμός Εργασιών",         "select", ["Μαθητού", "Εταίρου", "Διδασκάλου"]),
+                    ("syn_omilitis",   "Ομιλητής",                "member", ""),
+                    ("syn_thema",      "Θέμα Ομιλίας",            "textarea",""),
                 ],
             },
             {
@@ -457,15 +476,15 @@ DIKADIKASIEES: Dict[str, Dict] = {
             {
                 "title": "🎉 Στοιχεία Εκδήλωσης",
                 "fields": [
-                    ("typos",         "Τύπος",              "select",
+                    ("typos", "Τύπος", "select",
                      ["Υιοθεσία Λυκιδέων", "Τεκτονικό Μνημόσυνο",
                       "Τεκτ. Αναγνώριση Συζυγικού Δεσμού", "Ανοικτή Εκδήλωση"]),
-                    ("imerominia",    "Ημ/νία Εκδήλωσης",  "date",   ""),
-                    ("ora",           "Ώρα",                "text",   "19:30"),
-                    ("topos",         "Τόπος",              "text",   ""),
-                    ("omilitis",      "Ομιλητής",           "member", ""),
+                    ("imerominia",    "Ημ/νία Εκδήλωσης", "date",    ""),
+                    ("ora",           "Ώρα",               "text",    "19:30"),
+                    ("topos",         "Τόπος",             "text",    ""),
+                    ("omilitis",      "Ομιλητής",          "member",  ""),
                     ("thema_omilias", "Θέμα Ομιλίας",      "textarea",""),
-                    ("ypeuthinos",    "Υπεύθυνος Οργ.",     "member", ""),
+                    ("ypeuthinos",    "Υπεύθυνος Οργ.",    "member",  ""),
                 ],
             },
             {
@@ -483,125 +502,13 @@ DIKADIKASIEES: Dict[str, Dict] = {
             "Επίσημη γλώσσα και τεκτονικές συντομογραφίες."
         ),
     },
-
-    "🏅 Αίτηση Εγκατάστασης Νέων Αξιωματικών": {
-        "code": "egkatastasi",
-        "subtitle": "Άρθρο 88 Γ.Κ. — Μετά τον Εγκριτικό Πίνακα",
-        "description": (
-            "Επιστολή προς τη Μεγ. Γεν. Γραμματεία για ορισμό ημερομηνίας "
-            "Εγκατάστασης νέων Αξιωματικών, εντός 30 ημερών από τον Εγκριτικό Πίνακα (άρ. 88)."
-        ),
-        "deadline_note": "⏱️ Εντός 30 ημερών από τον Εγκριτικό Πίνακα (άρ. 88 Γ.Κ.).",
-        "steps": [
-            ("1", "Λήψη Εγκριτικού Πίνακα Εκλογής από Μεγ. Γεν. Γραμματεία", ["Άρ. 86"]),
-            ("2", "Καταγραφή Αρ. Πρωτ. & ημερομηνίας Εγκριτικού Πίνακα", []),
-            ("3", "Πρόταση 2-3 διαθέσιμων ημερομηνιών για Εγκατάσταση", []),
-            ("4", "Αποστολή Αίτησης Εγκατάστασης στη Μεγ. Γεν. Γραμματεία", ["Άρ. 88"]),
-            ("5", "Λήψη επιβεβαίωσης & ορισμός Επισκέπτη Αξιωματικού", []),
-            ("6", "Τελέσεις Εγκατάστασης — αναγγελία στη Μεγ. Γεν. Γραμμ.", []),
-        ],
-        "forms": [
-            {"name": "6. Αίτηση Ορισμού Ημερομηνίας Εγκατάστασης",
-             "file": "ekloges/6_-_ΑΙΤΗΣΗ_ΕΓΚΑΤΑΣΤΑΣΗΣ.docx",
-             "description": "Επίσημη επιστολή αίτησης εγκατάστασης"},
-        ],
-        "input_groups": [
-            {
-                "title": "📨 Στοιχεία Εγκριτικού Πίνακα (που ελήφθη)",
-                "fields": [
-                    ("egk_proto",     "Αρ. Πρωτ. Εγκριτικού Πίνακα", "text", "96802"),
-                    ("egk_imerominia","Ημ/νία Εγκριτικού",            "date", ""),
-                    ("ekl_diettia",   "Τεκτ. Διετία",                 "text", "2025-2027"),
-                ],
-            },
-            {
-                "title": "📅 Στοιχεία Εγκατάστασης",
-                "fields": [
-                    ("imerominia_egkat", "Ημ/νία Εγκατάστασης", "date", ""),
-                ],
-            },
-            {
-                "title": "📋 Στοιχεία Επιστολής",
-                "fields": [
-                    ("stoaa_proto",        "Αρ. Πρωτ. Επιστολής",  "text",   ""),
-                    ("imerominia_epistolis","Ημ/νία Επιστολής",     "date",   ""),
-                    ("st_sev",             "Σεβάσμιος",             "member", ""),
-                    ("st_gramm",           "Γραμματεύς",            "member", ""),
-                ],
-            },
-        ],
-        "claude_hint": (
-            "Αίτηση ορισμού ημερομηνίας εγκατάστασης νέων αξιωματικών Τεκτονικής Στοάς. "
-            "Γράψε σε επίσημη τεκτονική γλώσσα αναφερόμενος στον Εγκριτικό Πίνακα. "
-            "Βάσει άρθρου 88 Γεν. Κανονισμού ΜΣΤΕ."
-        ),
-    },
 }
 
-STOAA_NAME = "ΑΚΡΟΠΟΛΙΣ"
-STOAA_NUMBER = "84"
-STOAA_ANATOLI = "Αθηνών"
 
 # ══════════════════════════════════════════════════════════════
-# HELPERS
+# ΑΝΤΙΣΤΟΙΧΙΑ ΑΞΙΩΜΑΤΩΝ → ΠΕΔΙΑ
 # ══════════════════════════════════════════════════════════════
-def get_anthropic_key() -> str:
-    try:
-        return (
-            st.secrets.get("AI", {}).get("ANTHROPIC_API_KEY")
-            or st.secrets.get("ANTHROPIC_API_KEY", "")
-        )
-    except Exception:
-        return ""
-
-
-def load_members_dict() -> Dict[int, Dict]:
-    """Returns {id: member_dict}"""
-    try:
-        df = get_all_members()
-        result = {}
-        for _, row in df.iterrows():
-            result[int(row["id"])] = row.to_dict()
-        return result
-    except Exception:
-        return {}
-
-
-def member_display_name(m: Dict) -> str:
-    vatm = m.get("τεκτονικός_βαθμός", "")
-    prefix = {"Μαθητής": "Αδ∴", "Εταίρος": "Αδ∴", "Διδάσκαλος": "Αδ∴"}.get(vatm, "Αδ∴")
-    return f"{prefix} {m.get('επώνυμο','')} {m.get('όνομα','')}".strip()
-
-
-def read_docx_text(path: str) -> str:
-    """Extract raw text from docx for passing to Claude."""
-    try:
-        from docx import Document
-        doc = Document(path)
-        lines = []
-        for p in doc.paragraphs:
-            if p.text.strip():
-                lines.append(p.text.strip())
-        for table in doc.tables:
-            for row in table.rows:
-                seen = set()
-                for cell in row.cells:
-                    cid = id(cell._tc)
-                    if cid not in seen and cell.text.strip():
-                        lines.append(cell.text.strip())
-                        seen.add(cid)
-        return "\n".join(lines)
-    except Exception as e:
-        return f"[Σφάλμα ανάγνωσης: {e}]"
-
-
-# ══════════════════════════════════════════════════════════════
-# ΑΝΤΙΣΤΟΙΧΙΑ ΑΞΙΩΜΑΤΩΝ → ΠΕΔΙΑ ΧΡΗΣΤΗ
-# ══════════════════════════════════════════════════════════════
-
-# Αντιστοιχία κειμένου στήλης ΑΞΙΩΜΑ → key στα collected data
 AXIOMA_TO_KEY: Dict[str, str] = {
-    # Τακτικοί
     "ΣΕΒΑΣΜΙΟΣ":              "ax_sev",
     "Α΄ ΕΠΟΠΤΗΣ":             "ax_a_ep",
     "Β΄ ΕΠΟΠΤΗΣ":             "ax_b_ep",
@@ -617,17 +524,14 @@ AXIOMA_TO_KEY: Dict[str, str] = {
     "ΑΡΧΙΤ.  ΑΡΧΙΤΡ.":       "ax_arxitekt",
     "ΑΡΧΕΙΟΦ. - ΒΙΒΛΙΟΦ.":   "ax_arxif",
     "ΞΙΦΟΦ. - ΣΗΜΑΙΟΦ.":     "ax_xifok",
-    # Πρόσθετοι — με prefix "ΙΙ" section
     "ΡΗΤΩΡ_Π":                "pr_rhtor",
     "ΓΡΑΜΜ. - ΣΦΡΑΓΙΔ._Π":   "pr_gramm",
     "ΤΑΜΙΑΣ_Π":               "pr_tamias",
     "ΕΛΕΟΝΟΜΟΣ_Π":            "pr_eleon",
     "ΤΕΛΕΤΑΡΧΗΣ_Π":           "pr_tel",
-    # Εξελεγκτική
     "ΜΕΛΟΣ 1":                "ex_1",
     "ΜΕΛΟΣ 2":                "ex_2",
     "ΜΕΛΟΣ 3":                "ex_3",
-    # Απόσπασμα — για το αξίωμα του:
     "Ρήτορα":                 "ax_rhtor",
     "Γραμματέα - Σφραγιδοφύλακα": "ax_gramm",
     "Α΄ Δοκιμαστή":           "ax_a_dok",
@@ -647,17 +551,74 @@ AXIOMA_TO_KEY: Dict[str, str] = {
     "Πρόσθετου Τελετάρχη":    "pr_tel",
     "Μέλους της Εξελεγκτικής Επιτροπής": "ex_1",
     "Μέλους Εξελεγκτικής Επιτροπής":     "ex_1",
-    # Α'/Β' Επόπτης
     "Α΄ Επόπτου":             "ax_a_ep",
     "Β΄ Επόπτου":             "ax_b_ep",
 }
 
+# Αντιστοιχία αξίωμα → key για form 7
+AX_LABEL_TO_KEY = [
+    ("ΣΕΒΑΣΜΙΟΣ",      "ax_sev"),
+    ("Α΄ ΕΠΟΠΤΗΣ",     "ax_a_ep"),
+    ("Β΄ ΕΠΟΠΤΗΣ",     "ax_b_ep"),
+    ("ΡΗΤΩΡ",          "ax_rhtor"),
+    ("ΓΡΑΜΜΑΤΕΥΣ",     "ax_gramm"),
+    ("ΓΡΑΜΜ",          "ax_gramm"),
+    ("ΤΑΜΙΑΣ",         "ax_tamias"),
+    ("ΕΛΕΟΝΟΜΟΣ",      "ax_eleon"),
+    ("ΤΕΛΕΤΑΡΧΗΣ",     "ax_tel"),
+    ("ΣΤΕΓΑΣΤΗΣ",      "ax_steg"),
+    ("Α΄ ΔΟΚΙΜΑΣΤΗΣ",  "ax_a_dok"),
+    ("Β΄ ΔΟΚΙΜΑΣΤΗΣ",  "ax_b_dok"),
+    ("ΑΡΧΙΤΕΚΤΩΝ",     "ax_arxitekt"),
+    ("ΑΡΧΕΙΟΦΥΛΑΞ",    "ax_arxif"),
+    ("ΞΙΦΟΦΟΡΟΣ",      "ax_xifok"),
+]
+
+
 # ══════════════════════════════════════════════════════════════
-# ΒΟΗΘΗΤΙΚΕΣ ΣΥΝΑΡΤΗΣΕΙΣ ΕΓΓΡΑΦΗΣ ΣΤΟΥΣ ΠΙΝΑΚΕΣ
+# HELPERS
 # ══════════════════════════════════════════════════════════════
+def get_anthropic_key() -> str:
+    try:
+        return (
+            st.secrets.get("AI", {}).get("ANTHROPIC_API_KEY")
+            or st.secrets.get("ANTHROPIC_API_KEY", "")
+        )
+    except Exception:
+        return ""
+
+
+def load_members_dict() -> Dict[int, Dict]:
+    try:
+        df = get_all_members()
+        return {int(row["id"]): row.to_dict() for _, row in df.iterrows()}
+    except Exception:
+        return {}
+
+
+def member_display_name(m: Dict) -> str:
+    return f"Αδ∴ {m.get('επώνυμο','')} {m.get('όνομα','')}".strip()
+
+
+def read_docx_text(path: str) -> str:
+    try:
+        from docx import Document
+        doc = Document(path)
+        lines = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+        for table in doc.tables:
+            for row in table.rows:
+                seen = set()
+                for cell in row.cells:
+                    cid = id(cell._tc)
+                    if cid not in seen and cell.text.strip():
+                        lines.append(cell.text.strip())
+                        seen.add(cid)
+        return "\n".join(lines)
+    except Exception as e:
+        return f"[Σφάλμα ανάγνωσης: {e}]"
+
 
 def _unique_cells(row) -> List:
-    """Επιστρέφει μόνο τα μοναδικά cells μιας γραμμής (χωρίς duplicates από merged cells)."""
     seen = set()
     cells = []
     for cell in row.cells:
@@ -669,18 +630,15 @@ def _unique_cells(row) -> List:
 
 
 def _write_cell(cell, text: str) -> None:
-    """Γράφει κείμενο σε ένα cell διατηρώντας τη μορφοποίηση (font, size κλπ)."""
     text = str(text or "").strip()
     if not text:
         return
     for para in cell.paragraphs:
         if para.runs:
-            # Κρατάει τη μορφοποίηση του πρώτου run
             para.runs[0].text = text
             for r in para.runs[1:]:
                 r.text = ""
             return
-    # Αν δεν υπάρχουν runs, προσθέτουμε νέο
     if cell.paragraphs:
         cell.paragraphs[0].add_run(text)
     else:
@@ -688,7 +646,6 @@ def _write_cell(cell, text: str) -> None:
 
 
 def _replace_in_para(para, old: str, new: str) -> bool:
-    """Αντικαθιστά κείμενο σε paragraph που μπορεί να είναι split σε πολλά runs."""
     full = "".join(r.text for r in para.runs)
     if old not in full:
         return False
@@ -716,10 +673,19 @@ def _member_full_with_patronymic(m: Optional[Dict]) -> str:
     return " ".join(p for p in parts if p).strip()
 
 
-# ══════════════════════════════════════════════════════════════
-# ΚΥΡΙΑ ΣΥΝΑΡΤΗΣΗ ΕΓΓΡΑΦΗΣ — JSON ΔΟΜΗ → ΑΜΕΣΗ ΕΓΓΡΑΦΗ
-# ══════════════════════════════════════════════════════════════
+def _fmt_date_gr(d: str) -> str:
+    from datetime import datetime
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(d, fmt).strftime("%d/%m/%Y")
+        except Exception:
+            pass
+    return d or "——"
 
+
+# ══════════════════════════════════════════════════════════════
+# ΚΥΡΙΑ ΣΥΝΑΡΤΗΣΗ ΣΥΜΠΛΗΡΩΣΗΣ
+# ══════════════════════════════════════════════════════════════
 def fill_docx_smart(
     template_path: str,
     form_file_key: str,
@@ -727,149 +693,131 @@ def fill_docx_smart(
     members_by_field: Dict[str, Optional[Dict]],
     stoaa_data: Dict[str, str],
 ) -> bytes:
-    """
-    Κύρια συνάρτηση συμπλήρωσης εντύπων.
-    Χρησιμοποιεί άμεση εγγραφή στα σωστά cells βάσει δομής κάθε εντύπου.
-    ΔΕΝ κάνει text replacement — γράφει απευθείας στα κενά cells.
-    """
     from docx import Document
 
-    doc = Document(template_path)
+    doc  = Document(template_path)
     fname = os.path.basename(form_file_key).upper()
 
-    # ════════════════════════════════════════════════════════
-    # DEBUG PANEL
-    # ════════════════════════════════════════════════════════
-    with st.expander(f"🔍 DEBUG: {os.path.basename(form_file_key)}", expanded=True):
-        st.markdown(f"**form_file_key:** `{form_file_key}`")
-        st.markdown(f"**fname (uppercase):** `{fname}`")
-
-        st.markdown("**Έλεγχος συνθήκης εντύπου:**")
-        st.write({
-            "4_ΚΑΤΑΣΤΑΣΗ match": "4_-_ΚΑΤΑΣΤΑΣΗ" in fname or "ΚΑΤΑΣΤΑΣΗ_ΕΚΛ" in fname,
-            "3_ΑΝΑΛΥΤΙΚΟΣ match": "3_-_ΑΝΑΛΥΤΙΚ" in fname or "ΑΝΑΛΥΤΙΚΟΣ_ΠΙΝ" in fname,
-            "2Α_ΑΠΟΣΠΑΣΜΑ match": "2" in fname and "ΑΠΟΣΠ" in fname,
-            "1_ΑΝΑΓΓΕΛΙΑ match": "1_-_ΑΝΑΓΓΕΛΙΑ_ΕΚΛΟΓ" in fname or "ΑΝΑΓΓΕΛΙΑ_ΕΚΛΟΓ" in fname,
-            "5_ΟΝΟΜΑΣΤΙΚΗ match": "5_-_ΟΝΟΜΑΣΤ" in fname or "ΟΝΟΜΑΣΤΙΚΗ_ΚΑΤΑΣ" in fname,
-        })
-
-        st.markdown(f"**members_by_field keys:** `{list(members_by_field.keys())}`")
-        st.markdown(f"**Συνολικά members:** {sum(1 for v in members_by_field.values() if v is not None)}")
-
-        filled_members = {k: f"{v.get('επώνυμο','')} {v.get('όνομα','')}" 
-                         for k, v in members_by_field.items() if v}
-        if filled_members:
-            st.markdown("**Μέλη που επιλέχθηκαν:**")
-            for k, v in filled_members.items():
-                st.write(f"  - `{k}` → {v}")
-        else:
-            st.error("⚠️ ΔΕΝ ΕΠΙΛΕΧΘΗΚΑΝ ΜΕΛΗ! Πήγαινε στη καρτέλα 'Συμπλήρωση' και επίλεξε αξιωματικούς.")
-
-        st.markdown(f"**collected keys:** `{list(collected.keys())}`")
-        st.markdown(f"**ekl_diettia:** `{collected.get('ekl_diettia', 'ΔΕΝ ΒΡΕΘΗΚΕ')}`")
-        st.markdown(f"**ekl_imerominia:** `{collected.get('ekl_imerominia', 'ΔΕΝ ΒΡΕΘΗΚΕ')}`")
-    # ════════════════════════════════════════════════════════
-
-    # ── Βοηθητική: παίρνει μέλος από πεδίο ──────────────────
-    def get_member(field_key: str) -> Optional[Dict]:
+    def get_member_d(field_key: str) -> Optional[Dict]:
         return members_by_field.get(field_key)
 
     def get_name(field_key: str) -> str:
-        m = get_member(field_key)
-        return _member_full_name(m)
-
-    def get_name_pat(field_key: str) -> str:
-        m = get_member(field_key)
-        return _member_full_with_patronymic(m)
-
-    def get_surname(field_key: str) -> str:
-        m = get_member(field_key)
-        return m.get('επώνυμο', '') if m else ''
-
-    def get_firstname(field_key: str) -> str:
-        m = get_member(field_key)
-        return m.get('όνομα', '') if m else ''
+        return _member_full_name(get_member_d(field_key))
 
     def get_field(fid: str) -> str:
         return str(collected.get(fid, '') or '')
 
-    diettia = get_field("ekl_diettia") or "2024-2026"
-    diettia_parts = diettia.replace("-", " / ").replace("–", " / ")
-    imerominia = get_field("ekl_imerominia")
-    psifisantes = get_field("ekl_psifisantes")
+    diettia        = get_field("ekl_diettia") or "2024-2026"
+    diettia_parts  = diettia.replace("-", " / ").replace("–", " / ")
+    imerominia     = get_field("ekl_imerominia")
+    psifisantes    = get_field("ekl_psifisantes")
 
+    # ── Helpers για replacement ───────────────────────────────
+    def _apply_repls(document, repls: Dict[str, str]):
+        all_paras = list(document.paragraphs)
+        for tbl in document.tables:
+            for row in tbl.rows:
+                for cell in row.cells:
+                    all_paras.extend(cell.paragraphs)
+        for para in all_paras:
+            full = "".join(r.text for r in para.runs)
+            changed = False
+            for old, new in repls.items():
+                if old in full:
+                    full = full.replace(old, new)
+                    changed = True
+            if changed and para.runs:
+                para.runs[0].text = full
+                for r in para.runs[1:]:
+                    r.text = ""
 
     # ══════════════════════════════════════════════════════════
-    # FORM 6: ΑΙΤΗΣΗ ΕΓΚΑΤΑΣΤΑΣΗΣ  ({{placeholder}} replacement)
+    # FORM 6 — ΑΙΤΗΣΗ ΕΓΚΑΤΑΣΤΑΣΗΣ
     # ══════════════════════════════════════════════════════════
-    if "6_-_ΑΙΤΗΣΗ_ΕΓΚΑΤ" in fname or "ΑΙΤΗΣΗ_ΕΓΚΑΤ" in fname:
-
-        def _fmt_date_gr(d: str) -> str:
-            try:
-                from datetime import datetime
-                return datetime.strptime(d, "%Y-%m-%d").strftime("%d/%m/%Y")
-            except Exception:
-                return d or "——"
-
-        repls6: Dict[str, str] = {
-            "{{STOAA_NAME}}":          stoaa_data.get("name", STOAA_NAME),
-            "{{STOAA_NUMBER}}":        stoaa_data.get("number", STOAA_NUMBER),
-            "{{STOAA_ANATOLI}}":       stoaa_data.get("anatoli", STOAA_ANATOLI),
-            "{{STOAA_PROTO}}":         get_field("stoaa_proto"),
-            "{{IMEROMINIA_EPISTOLIS}}":_fmt_date_gr(get_field("imerominia_epistolis")),
-            "{{EGK_PROTO}}":           get_field("egk_proto"),
-            "{{EGK_IMEROMINIA}}":      _fmt_date_gr(get_field("egk_imerominia")),
-            "{{EKL_DIETTIA}}":         get_field("ekl_diettia") or "2025-2027",
-            "{{IMEROMINIA_EGKAT}}":    _fmt_date_gr(get_field("imerominia_egkat")),
-            "{{SEV_FULLNAME}}":        _member_full_name(get_member("st_sev")),
-            "{{GRAMM_FULLNAME}}":      _member_full_name(get_member("st_gramm")),
+    if "6_-_ΑΙΤΗΣΗ_ΕΓΚΑΤ" in fname or ("ΑΙΤΗΣΗ" in fname and "ΕΓΚΑΤ" in fname):
+        repls6 = {
+            "{{STOAA_NAME}}":           stoaa_data.get("name", STOAA_NAME),
+            "{{STOAA_NUMBER}}":         stoaa_data.get("number", STOAA_NUMBER),
+            "{{STOAA_ANATOLI}}":        stoaa_data.get("anatoli", STOAA_ANATOLI),
+            "{{STOAA_PROTO}}":          get_field("stoaa_proto"),
+            "{{IMEROMINIA_EPISTOLIS}}": _fmt_date_gr(get_field("imerominia_epistolis")),
+            "{{EGK_PROTO}}":            get_field("egkat_egk_proto") or get_field("egk_proto"),
+            "{{EGK_IMEROMINIA}}":       _fmt_date_gr(get_field("egkat_egk_im") or get_field("egk_imerominia")),
+            "{{EKL_DIETTIA}}":          diettia,
+            "{{IMEROMINIA_EGKAT}}":     _fmt_date_gr(get_field("egkat_imerominia") or get_field("imerominia_egkat")),
+            "{{SEV_FULLNAME}}":         _member_full_name(get_member_d("st_sev") or get_member_d("ax_sev")),
+            "{{GRAMM_FULLNAME}}":       _member_full_name(get_member_d("st_gramm") or get_member_d("ax_gramm")),
         }
+        _apply_repls(doc, repls6)
+        buf = io.BytesIO()
+        doc.save(buf)
+        return buf.getvalue()
 
-        def _replace_placeholders(document, repls):
-            for para in document.paragraphs:
-                full = "".join(r.text for r in para.runs)
-                changed = False
-                for old, new in repls.items():
-                    if old in full:
-                        full = full.replace(old, new)
-                        changed = True
-                if changed and para.runs:
-                    para.runs[0].text = full
+    # ══════════════════════════════════════════════════════════
+    # FORM 7 — ΑΝΑΓΓΕΛΙΑ ΕΓΚΑΤΑΣΤΑΣΕΩΣ ΣΕΒΑΣΜΙΟΥ & ΣΥΜΒΟΥΛΙΟΥ
+    # ══════════════════════════════════════════════════════════
+    elif ("ΕΓΚΑΤΑΣΤΑΣΕΩΣ" in fname and "ΑΝΑΓΓΕΛ" in fname) or \
+         (os.path.basename(form_file_key).startswith("7") and "ΕΓΚΑΤ" in fname):
+
+        sev_name   = get_name("ax_sev")
+        gramm_name = get_name("ax_gramm")
+        egkat_im   = _fmt_date_gr(get_field("egkat_imerominia"))
+        egk_proto  = get_field("egkat_egk_proto")
+        emvolimes  = get_field("emvolimes")
+        logos      = get_field("emvolimes_logos")
+
+        repls7 = {
+            "{{SEV}}":               sev_name,
+            "{{GRAMM}}":             gramm_name,
+            "{{DIETTIA}}":           diettia,
+            "{{EGKAT_IMEROMINIA}}":  egkat_im,
+            "{{EGK_PROTO}}":         egk_proto,
+            "{{STOAA}}":             stoaa_data.get("name", STOAA_NAME),
+            "{{ANATOLI}}":           stoaa_data.get("anatoli", STOAA_ANATOLI),
+            "{{EMVOLIMES}}":         emvolimes,
+            "{{LOGOS_EMVOLIMWN}}":   logos,
+        }
+        _apply_repls(doc, repls7)
+
+        # Υπογραφές
+        for para in doc.paragraphs:
+            ft = "".join(r.text for r in para.runs)
+            if ("___" in ft or "....." in ft) and (sev_name or gramm_name):
+                new_ft = f"     {sev_name}\t\t\t\t\t{gramm_name}"
+                if para.runs:
+                    para.runs[0].text = new_ft
                     for r in para.runs[1:]:
                         r.text = ""
-            for tbl in document.tables:
-                for row in tbl.rows:
-                    for cell in row.cells:
-                        for para in cell.paragraphs:
-                            full = "".join(r.text for r in para.runs)
-                            changed = False
-                            for old, new in repls.items():
-                                if old in full:
-                                    full = full.replace(old, new)
-                                    changed = True
-                            if changed and para.runs:
-                                para.runs[0].text = full
-                                for r in para.runs[1:]:
-                                    r.text = ""
 
-        _replace_placeholders(doc, repls6)
-        buf6 = io.BytesIO()
-        doc.save(buf6)
-        return buf6.getvalue()
+        # Πίνακας αξιωματικών (αν υπάρχει)
+        for tbl in doc.tables:
+            for row in tbl.rows:
+                cells = _unique_cells(row)
+                nc = len(cells)
+                if nc < 2:
+                    continue
+                ax = cells[0].text.strip().upper()
+                for ax_label, fk in AX_LABEL_TO_KEY:
+                    if ax_label in ax:
+                        m = get_member_d(fk)
+                        if m:
+                            if nc > 1:
+                                _write_cell(cells[1], _member_full_name(m))
+                            if nc > 2:
+                                _write_cell(cells[2], str(m.get("αρ_μητρώου_μσ", "") or ""))
+                        break
+
+        buf = io.BytesIO()
+        doc.save(buf)
+        return buf.getvalue()
 
     # ══════════════════════════════════════════════════════════
-    # FORM 4: ΚΑΤΑΣΤΑΣΗ ΕΚΛΕΓΕΝΤΩΝ ΑΞΙΩΜΑΤΙΚΩΝ
-    # Δομή: 1 table, 32 rows, 12 unique cols per data row
-    # Col 3: ΑΞΙΩΜΑ, Col 4: ΕΠΩΝΥΜΟ, Col 5: ΟΝΟΜΑ,
-    # Col 6: ΔΙΕΥΘΥΝΣΗ, Col 7: ΠΟΛΗ-ΤΚ, Col 8: ΚΙΝΗΤΟ,
-    # Col 9: ΣΤΑΘΕΡΟ, Col 10: EMAIL
+    # FORM 4 — ΚΑΤΑΣΤΑΣΗ ΕΚΛΕΓΕΝΤΩΝ ΑΞΙΩΜΑΤΙΚΩΝ
     # ══════════════════════════════════════════════════════════
-    if "4_-_ΚΑΤΑΣΤΑΣΗ" in fname or "ΚΑΤΑΣΤΑΣΗ_ΕΚΛ" in fname:
+    elif "4_-_ΚΑΤΑΣΤΑΣΗ" in fname or "ΚΑΤΑΣΤΑΣΗ_ΕΚΛ" in fname:
         table = doc.tables[0]
         in_prostheti = False
-        filled_count = 0
 
-        # Header cells
         for r_i, row in enumerate(table.rows):
             cells = _unique_cells(row)
             if len(cells) < 2:
@@ -879,88 +827,52 @@ def fill_docx_smart(
                 if "Τεκτ" in ct and "Διετία" in ct and c_i + 1 < len(cells):
                     _write_cell(cells[c_i + 1], diettia_parts)
                 elif ct in ("Σ Στοά:", "Σ∴ Στ∴:", "Σ. Στ.:") and c_i + 1 < len(cells):
-                    _write_cell(cells[c_i + 1], f"{stoaa_data['name']}")
+                    _write_cell(cells[c_i + 1], stoaa_data["name"])
                 elif ct in ("Εν Αν:", "Εν Αν∴:") and c_i + 1 < len(cells):
-                    _write_cell(cells[c_i + 1], stoaa_data['anatoli'])
+                    _write_cell(cells[c_i + 1], stoaa_data["anatoli"])
 
-        # Official rows
-        debug_rows = []
         for r_i, row in enumerate(table.rows):
             cells = _unique_cells(row)
             if len(cells) < 5:
                 continue
             axioma = cells[3].text.strip() if len(cells) > 3 else ""
-
             if "ΠΡΟΣΘΕΤΟΙ" in axioma:
                 in_prostheti = True
                 continue
             if axioma in ("Ι", "ΙΙ", "ΙΙΙ"):
                 in_prostheti = False
                 continue
-
-            lookup = axioma + ("_Π" if in_prostheti else "")
+            lookup    = axioma + ("_Π" if in_prostheti else "")
             field_key = AXIOMA_TO_KEY.get(lookup) or AXIOMA_TO_KEY.get(axioma)
             if not field_key or not axioma or axioma.startswith("Α/Α"):
                 continue
-
-            m = get_member(field_key)
-            debug_rows.append({
-                "row": r_i,
-                "axioma": axioma,
-                "field_key": field_key,
-                "member_found": m is not None,
-                "name": f"{m.get('επώνυμο','')} {m.get('όνομα','')}" if m else "—"
-            })
-
+            m = get_member_d(field_key)
             if not m:
                 continue
-
-            if len(cells) > 4:
-                _write_cell(cells[4], m.get('επώνυμο', ''))
-            if len(cells) > 5:
-                _write_cell(cells[5], m.get('όνομα', ''))
-            if len(cells) > 6:
-                _write_cell(cells[6], m.get('διεύθυνση', ''))
+            if len(cells) > 4: _write_cell(cells[4], m.get('επώνυμο', ''))
+            if len(cells) > 5: _write_cell(cells[5], m.get('όνομα', ''))
+            if len(cells) > 6: _write_cell(cells[6], m.get('διεύθυνση', ''))
             if len(cells) > 7:
                 poli = m.get('πόλη', '')
-                tk = m.get('τ_κ', '') or m.get('τκ', '')
+                tk   = m.get('τ_κ', '') or m.get('τκ', '')
                 _write_cell(cells[7], f"{poli} {tk}".strip())
-            if len(cells) > 8:
-                _write_cell(cells[8], m.get('κινητό', '') or m.get('κινητο', ''))
-            if len(cells) > 9:
-                _write_cell(cells[9], m.get('τηλέφωνο', '') or m.get('τηλεφωνο', ''))
-            if len(cells) > 10:
-                _write_cell(cells[10], m.get('email', ''))
-            filled_count += 1
-
-        with st.expander("🔍 DEBUG Form 4 — Γραμμές πίνακα", expanded=True):
-            st.markdown(f"**Συνολικά γραμμές αξιωματικών που βρέθηκαν:** {len(debug_rows)}")
-            st.markdown(f"**Γραμμές που συμπληρώθηκαν:** {filled_count}")
-            for dr in debug_rows:
-                icon = "✅" if dr["member_found"] else "❌"
-                st.write(f"{icon} R{dr['row']} `{dr['axioma']}` → key:`{dr['field_key']}` → {dr['name']}")
+            if len(cells) > 8:  _write_cell(cells[8],  m.get('κινητό', '') or m.get('κινητο', ''))
+            if len(cells) > 9:  _write_cell(cells[9],  m.get('τηλέφωνο', '') or m.get('τηλεφωνο', ''))
+            if len(cells) > 10: _write_cell(cells[10], m.get('email', ''))
 
     # ══════════════════════════════════════════════════════════
-    # ══════════════════════════════════════════════════════════
-    # FORM 3: ΑΝΑΛΥΤΙΚΟΣ ΠΙΝΑΚΑΣ ΕΚΛΕΓΕΝΤΩΝ
-    # Δομή (από ανάλυση συμπληρωμένου): 1 table, 37 rows
-    # Offset +2: cols 0,1 = merged logo. Data cols ξεκινούν από [2]
-    # R03[3]=Τεκτ.Διετία, R05[3]=Ημ.αρχ, R07[3]=Ψηφίσαντες
-    # R12-R35 data: [2]=α/α,[3]=ΑΞΙΩΜΑ,[4]=ΟΝΟΜΑ&ΠΑΤ,[5]=ΑΜΜΣ,
-    #               [6]=ΜΑΘ,[7]=ΔΙΔ,[8]=ΜΕΛΟΣ ΑΠΟ,[9]=ΛΕΥΚΕΣ
-    # R36: [4]=ΟΣΕΒΑΣΜΙΟΣname, [6]=ΟΓΡΑΜΜΑΤΕΑΣ name
+    # FORM 3 — ΑΝΑΛΥΤΙΚΟΣ ΠΙΝΑΚΑΣ ΕΚΛΕΓΕΝΤΩΝ
     # ══════════════════════════════════════════════════════════
     elif "3_-_ΑΝΑΛΥΤΙΚ" in fname or "ΑΝΑΛΥΤΙΚΟΣ_ΠΙΝ" in fname:
-        table = doc.tables[0]
+        table        = doc.tables[0]
         in_prostheti = False
-        ex_count = 0
-        diettia_yr = diettia.replace("-", "\t\t  /  ") if "-" in diettia else diettia
+        ex_count     = 0
+        diettia_yr   = diettia.replace("-", "\t\t  /  ") if "-" in diettia else diettia
 
         for r_i, row in enumerate(table.rows):
             cells = _unique_cells(row)
-            nc = len(cells)
+            nc    = len(cells)
 
-            # Header rows (R03, R05, R07)
             if nc >= 4:
                 ct3 = cells[3].text.strip() if nc > 3 else ""
                 if "Τεκτονική Διετία" in ct3:
@@ -970,13 +882,11 @@ def fill_docx_smart(
                 elif "Αριθμός ψηφισάντων" in ct3:
                     _write_cell(cells[3], f"Αριθμός ψηφισάντων : \t{psifisantes}")
 
-            # Signature row R36 — γράφει το όνομα στο Para 1 (αμέσως μετά τον τίτλο)
             if nc >= 7:
                 cell4_text = cells[4].text if nc > 4 else ""
                 if "ΣΕΒΑΣΜΙΟΣ" in cell4_text:
-                    sev_name = get_name("ax_sev")
+                    sev_name   = get_name("ax_sev")
                     gramm_name = get_name("ax_gramm")
-                    # Γράφουμε στο Para 1 (0=τίτλος, 1=κενό για όνομα, 2=κενό, 3=tabs, 4=caption)
                     for sig_cell, sig_name in [(cells[4], sev_name), (cells[6], gramm_name)]:
                         if sig_name and len(sig_cell.paragraphs) > 1:
                             p = sig_cell.paragraphs[1]
@@ -984,20 +894,11 @@ def fill_docx_smart(
                                 p.runs[0].text = sig_name
                                 for r in p.runs[1:]: r.text = ""
                             else:
-                                run = p.add_run(sig_name)
-                                # Αντιγραφή font από Para 0
-                                try:
-                                    src_font = sig_cell.paragraphs[0].runs[0].font if sig_cell.paragraphs[0].runs else None
-                                    if src_font:
-                                        run.bold = src_font.bold
-                                except Exception:
-                                    pass
+                                p.add_run(sig_name)
 
-            # Data rows (12 unique cells)
             if nc < 10:
                 continue
             axioma = cells[3].text.strip()
-
             if "ΠΡΟΣΘΕΤΟΙ" in axioma or axioma == "ΙΙ":
                 in_prostheti = True
                 continue
@@ -1010,38 +911,36 @@ def fill_docx_smart(
                 continue
 
             if axioma.startswith("ΜΕΛΟΣ"):
-                ex_count += 1
-                field_key = f"ex_{ex_count}"
+                ex_count  += 1
+                field_key  = f"ex_{ex_count}"
             else:
-                lookup = axioma + ("_Π" if in_prostheti else "")
+                lookup    = axioma + ("_Π" if in_prostheti else "")
                 field_key = AXIOMA_TO_KEY.get(lookup) or AXIOMA_TO_KEY.get(axioma)
 
             if not field_key or not axioma or axioma.startswith("Α/Α"):
                 continue
-
-            m = get_member(field_key)
+            m = get_member_d(field_key)
             if not m:
                 continue
 
             full_name = f"{m.get('επώνυμο','')} {m.get('όνομα','')}"
-            pat = m.get('πατρώνυμο','')
+            pat = m.get('πατρώνυμο', '')
             if pat:
                 full_name += f"\nτου {pat}"
-            amms = str(m.get('αρ_μητρώου_μσ','') or '')
+            amms  = str(m.get('αρ_μητρώου_μσ', '') or '')
             psifoi = str(psifisantes)
 
-            _write_cell(cells[4], full_name)   # ΟΝΟΜΑΤΕΠΩΝΥΜΟ & ΠΑΤΡΩΝΥΜΟ
-            _write_cell(cells[5], amms)         # Α.Μ.Μ.Σ.
-            _write_cell(cells[9], psifoi)       # ΛΕΥΚΕΣ ΨΗΦΟΙ
+            _write_cell(cells[4], full_name)
+            _write_cell(cells[5], amms)
+            _write_cell(cells[9], psifoi)
 
     # ══════════════════════════════════════════════════════════
-    # FORM 2Α: ΑΠΟΣΠΑΣΜΑ ΕΚΛΟΓΗΣ ΑΞΙΩΜΑΤΙΚΩΝ
+    # FORM 2Α — ΑΠΟΣΠΑΣΜΑ ΕΚΛΟΓΗΣ
     # ══════════════════════════════════════════════════════════
     elif "2" in fname and "ΑΠΟΣΠ" in fname:
-        sev_name = get_name("ax_sev")
+        sev_name   = get_name("ax_sev")
         gramm_name = get_name("ax_gramm")
 
-        # Paragraphs — ψηφίσαντες count
         for para in doc.paragraphs:
             ft = "".join(r.text for r in para.runs)
             if "παρίστανται" in ft and "Διδ" in ft and "____" in ft:
@@ -1050,94 +949,73 @@ def fill_docx_smart(
                     para.runs[0].text = new_ft
                     for r in para.runs[1:]: r.text = ""
 
-        # Tables: see 2Α structure
         for t_i, table in enumerate(doc.tables):
             for r_i, row in enumerate(table.rows[1:], 1):
                 cells = _unique_cells(row)
-                nc = len(cells)
+                nc    = len(cells)
                 if nc < 2: continue
-
-                # Κατάσταση εκλεγέντων/υποψηφίων
                 for c_i in range(nc):
                     ax = cells[c_i].text.strip()
                     fk = AXIOMA_TO_KEY.get(ax)
                     if fk:
-                        # Επόμενο κενό cell
-                        for next_c in range(c_i+1, nc):
+                        for next_c in range(c_i + 1, nc):
                             if not cells[next_c].text.strip():
                                 _write_cell(cells[next_c], get_name(fk))
                                 break
 
     # ══════════════════════════════════════════════════════════
-    # FORM 1: ΑΝΑΓΓΕΛΙΑ ΕΚΛΟΓΗΣ ΣΕΒΑΣΜΙΟΥ
-    # Παράγραφοι με runs — ακριβής αντικατάσταση βάσει δομής
+    # FORM 1 — ΑΝΑΓΓΕΛΙΑ ΕΚΛΟΓΗΣ ΣΕΒΑΣΜΙΟΥ
     # ══════════════════════════════════════════════════════════
     elif "1_-_ΑΝΑΓΓΕΛΙΑ_ΕΚΛΟΓ" in fname or "ΑΝΑΓΓΕΛΙΑ_ΕΚΛΟΓ" in fname:
-        sev_name = get_name("ax_sev")
+        sev_name   = get_name("ax_sev")
         gramm_name = get_name("ax_gramm")
-        gramm_m = get_member("ax_gramm")
+        gramm_m    = get_member_d("ax_gramm")
         paraliptis = gramm_m or {}
 
-        # Υπολογισμός διετίας σε λεκτική μορφή
-        parts = diettia.split("-") if "-" in diettia else ["2025","2027"]
+        parts    = diettia.split("-") if "-" in diettia else ["2025", "2027"]
         yr_start = parts[0].strip() if len(parts) > 0 else "2025"
         yr_end   = parts[1].strip() if len(parts) > 1 else "2027"
         diettia_lektiki = f"01/10/{yr_start} - 30/09/{yr_end}"
 
-        # Ημερομηνία σε λεκτική μορφή (π.χ. "23η Απριλίου 2026")
         try:
             from datetime import datetime
             dt = datetime.strptime(imerominia, "%d/%m/%Y")
             months = ["Ιανουαρίου","Φεβρουαρίου","Μαρτίου","Απριλίου","Μαΐου",
                       "Ιουνίου","Ιουλίου","Αυγούστου","Σεπτεμβρίου","Οκτωβρίου",
                       "Νοεμβρίου","Δεκεμβρίου"]
-            day_suffix = "η" if dt.day != 1 else "η"
-            imerominia_lektiki = f"{dt.day}{day_suffix} {months[dt.month-1]} {dt.year}"
+            imerominia_lektiki = f"{dt.day}η {months[dt.month-1]} {dt.year}"
         except Exception:
             imerominia_lektiki = imerominia
 
         for para in doc.paragraphs:
             ft = "".join(r.text for r in para.runs)
-
-            # P010: ημερομηνία + διετία
             if "τιμή να σας πληροφορήσουμε" in ft:
-                # Αντικατάσταση ημερομηνίας συνεδρίας
-                import re as _re
-                new_ft = _re.sub(r'\d+η?\s+\w+\s+\d{4}(?=\t)', imerominia_lektiki, ft)
-                # Αντικατάσταση διετίας
-                new_ft = _re.sub(r'01/10/\s*\d+\s*-\s*30/09/\s*\d+', diettia_lektiki, new_ft)
+                new_ft = re.sub(r'\d+η?\s+\w+\s+\d{4}(?=\t)', imerominia_lektiki, ft)
+                new_ft = re.sub(r'01/10/\s*\d+\s*-\s*30/09/\s*\d+', diettia_lektiki, new_ft)
                 if para.runs:
                     para.runs[0].text = new_ft
                     for r in para.runs[1:]: r.text = ""
-
-            # P018: Ονοματεπώνυμο παραλήπτη
             elif "Ονοματεπώνυμο παραλήπτη" in ft:
                 par_name = f"{paraliptis.get('επώνυμο','')} {paraliptis.get('όνομα','')}".strip()
-                par_tel = paraliptis.get('κινητό','') or paraliptis.get('τηλέφωνο','')
-                new_ft = f"Ονοματεπώνυμο παραλήπτη: \t{par_name}  \tΤηλ.: \t{par_tel}\t\t"
+                par_tel  = paraliptis.get('κινητό','') or paraliptis.get('τηλέφωνο','')
+                new_ft   = f"Ονοματεπώνυμο παραλήπτη: \t{par_name}  \tΤηλ.: \t{par_tel}\t\t"
                 if para.runs:
                     para.runs[0].text = new_ft
                     for r in para.runs[1:]: r.text = ""
-
-            # P019: Οδός
             elif "Οδός" in ft and "Τ.Κ." in ft:
-                addr = paraliptis.get('διεύθυνση','')
-                tk = paraliptis.get('τ_κ','') or paraliptis.get('τκ','')
-                city = paraliptis.get('πόλη','')
+                addr   = paraliptis.get('διεύθυνση','')
+                tk     = paraliptis.get('τ_κ','') or paraliptis.get('τκ','')
+                city   = paraliptis.get('πόλη','')
                 new_ft = f"Οδός \t{addr} Τ.Κ. {tk}\t Πόλη \t{city}  "
                 if para.runs:
                     para.runs[0].text = new_ft
                     for r in para.runs[1:]: r.text = ""
-
-            # P020: Email
             elif ft.strip().startswith("Email") and len(ft.strip()) < 30:
-                email = paraliptis.get('email','')
+                email  = paraliptis.get('email','')
                 new_ft = f"Email: \t\t\t\t{email}"
                 if para.runs:
                     para.runs[0].text = new_ft
                     for r in para.runs[1:]: r.text = ""
-
-            # P025: Υπογραφές (___ΟΝΟΜΑτεπ___ δομή)
             elif "___" in ft or ("Ονοματεπώνυμο" in ft and "υπογραφή" in ft and "_" in ft):
                 if sev_name and gramm_name:
                     new_ft = f"     ___{sev_name} _________________\t\t_{gramm_name} /______________________"
@@ -1146,21 +1024,11 @@ def fill_docx_smart(
                         for r in para.runs[1:]: r.text = ""
 
     # ══════════════════════════════════════════════════════════
-    # FORM 5: ΟΝΟΜΑΣΤΙΚΗ ΚΑΤΑΣΤΑΣΗ ΨΗΦΙΣΑΝΤΩΝ
-    # Γεμίζει από το Μητρώο (όλα τα ενεργά μέλη ταξινομημένα)
-    # Δομή: R00[1]=Τεκτ.Διετία,[2]=αρ.ψηφισάντων
-    #        R01[1]=Στοά,[2]=αριθμός
-    #        R02[1]=Αρχαιρεσίες της
-    #        R04[1]=Ανατολή+ημ/νία
-    #        R07+: [0]=α/α,[1]=ΑΜΜΣ,[2]=ΟΝΟΜΑΤΕΠΩΝΥΜΟ (1η στήλη)
-    #              [3]=α/α,[4]=ΑΜΜΣ,[5]=ΟΝΟΜΑΤΕΠΩΝΥΜΟ (2η στήλη)
+    # FORM 5 — ΟΝΟΜΑΣΤΙΚΗ ΚΑΤΑΣΤΑΣΗ ΨΗΦΙΣΑΝΤΩΝ
     # ══════════════════════════════════════════════════════════
     elif "5_-_ΟΝΟΜΑΣΤ" in fname or "ΟΝΟΜΑΣΤΙΚΗ_ΚΑΤΑΣ" in fname:
-        # Λίστα ψηφισάντων — από UI (collected) ή fallback σε DB
         all_members_list = []
-
-        # Πρώτα ψάχνουμε στο collected (αν υπάρχει λίστα ψηφισάντων από UI)
-        psifisantes_raw = collected.get("psifisantes_list", [])
+        psifisantes_raw  = collected.get("psifisantes_list", [])
         if isinstance(psifisantes_raw, str):
             try:
                 psifisantes_raw = json.loads(psifisantes_raw)
@@ -1171,23 +1039,14 @@ def fill_docx_smart(
             for entry in psifisantes_raw:
                 if isinstance(entry, dict):
                     all_members_list.append(entry)
-                else:
-                    # Αν είναι member dict από member_refs
-                    m = members_by_field.get(str(entry), {}) or {}
-                    if m:
-                        all_members_list.append({
-                            "amms": str(m.get("αρ_μητρώου_μσ","") or ""),
-                            "name": f"{m.get('επώνυμο','')} {m.get('όνομα','')}".strip(),
-                        })
         else:
-            # Fallback: όλα τα ενεργά μέλη από DB ταξινομημένα κατά ΑΜΜΣ
             try:
                 df_all = get_all_members()
                 for _, row_m in df_all.iterrows():
-                    vatm = str(row_m.get("τεκτονικός_βαθμός","") or "")
-                    if vatm in ("Μαθητής","Εταίρος","Διδάσκαλος"):
+                    vatm = str(row_m.get("τεκτονικός_βαθμός", "") or "")
+                    if vatm in ("Μαθητής", "Εταίρος", "Διδάσκαλος"):
                         all_members_list.append({
-                            "amms": str(row_m.get("αρ_μητρώου_μσ","") or ""),
+                            "amms": str(row_m.get("αρ_μητρώου_μσ", "") or ""),
                             "name": f"{row_m.get('επώνυμο','')} {row_m.get('όνομα','')}".strip(),
                         })
                 all_members_list.sort(
@@ -1196,50 +1055,44 @@ def fill_docx_smart(
                 pass
 
         if doc.tables:
-            table = doc.tables[0]
-            diettia_yr = diettia.replace("-", "\t  /  ") if "-" in diettia else diettia
+            table       = doc.tables[0]
+            diettia_yr2 = diettia.replace("-", "\t  /  ") if "-" in diettia else diettia
 
             for r_i, row in enumerate(table.rows):
                 cells = _unique_cells(row)
-                nc = len(cells)
+                nc    = len(cells)
                 if nc < 2: continue
                 ct1 = cells[1].text.strip() if nc > 1 else ""
-                ct2 = cells[2].text.strip() if nc > 2 else ""
 
-                # Header rows
-                if "ΤεκτΔιετία" in ct1 or "Τεκτ" in ct1 and "Διετία" in ct1:
-                    _write_cell(cells[1], f"ΤεκτΔιετία: {diettia_yr}")
+                if "ΤεκτΔιετία" in ct1 or ("Τεκτ" in ct1 and "Διετία" in ct1):
+                    _write_cell(cells[1], f"ΤεκτΔιετία: {diettia_yr2}")
                     _write_cell(cells[2], f"Αριθμός ψηφισάντων: {psifisantes}")
                 elif "Σ Στοά" in ct1 or "ΣΣτοά" in ct1:
                     _write_cell(cells[1], f"Σ Στοά: \t{stoaa_data['name']}")
                     if nc > 2: _write_cell(cells[2], f"υπ' αριθ.: {stoaa_data['number']}")
                 elif "Αρχαιρεσίες" in ct1:
-                    # Format imerominia as "26ης Απριλίου 2026"
                     try:
                         from datetime import datetime
-                        dt = datetime.strptime(imerominia, "%d/%m/%Y")
+                        dt2 = datetime.strptime(imerominia, "%d/%m/%Y")
                         months_gen = ["Ιανουαρίου","Φεβρουαρίου","Μαρτίου","Απριλίου","Μαΐου",
                                       "Ιουνίου","Ιουλίου","Αυγούστου","Σεπτεμβρίου","Οκτωβρίου",
                                       "Νοεμβρίου","Δεκεμβρίου"]
-                        im_gen = f"{dt.day}ης {months_gen[dt.month-1]} \t\t {dt.year}"
+                        im_gen = f"{dt2.day}ης {months_gen[dt2.month-1]} \t\t {dt2.year}"
                     except Exception:
                         im_gen = imerominia
                     _write_cell(cells[1], f"Αρχαιρεσίες της : {im_gen}")
                 elif "Ανατολή" in ct1:
                     _write_cell(cells[1], f"Ανατολή:  \t{stoaa_data['anatoli']}∴\t\t\t  Ημερομηνία: {imerominia}")
 
-                # Data rows — δομή: C2=α/α_left, C3=ΑΜΜΣ_left, C4=ΟΝΟΜΑ_left
-                #                    C6=α/α_right, C7=ΑΜΜΣ_right, C8=ΟΝΟΜΑ_right
                 if nc >= 5 and cells[2].text.strip().rstrip(".").isdigit():
-                    aa_left = int(cells[2].text.strip().rstrip("."))
+                    aa_left  = int(cells[2].text.strip().rstrip("."))
                     idx_left = aa_left - 1
                     if idx_left < len(all_members_list):
                         m_data = all_members_list[idx_left]
                         _write_cell(cells[3], m_data["amms"])
                         _write_cell(cells[4], m_data["name"])
-
                     if nc >= 9 and cells[6].text.strip().rstrip(".").isdigit():
-                        aa_right = int(cells[6].text.strip().rstrip("."))
+                        aa_right  = int(cells[6].text.strip().rstrip("."))
                         idx_right = aa_right - 1
                         if idx_right < len(all_members_list):
                             m_data_r = all_members_list[idx_right]
@@ -1247,42 +1100,7 @@ def fill_docx_smart(
                             _write_cell(cells[8], m_data_r["name"])
 
     # ══════════════════════════════════════════════════════════
-    # FORM 6: ΗΜΕΡΟΜΗΝΙΑ ΕΓΚΑΤΑΣΤΑΣΕΩΣ ΝΕΩΝ ΑΡΧΩΝ
-    # Απλό έγγραφο — paragraphs με Σεβ/Γραμμ
-    # ══════════════════════════════════════════════════════════
-    elif "6_-_ΕΓΚΑΤ" in fname or "ΕΓΚΑΤΑΣΤΑΣΕΩΣ_ΝΕΩΝ" in fname:
-        sev_name = get_name("ax_sev")
-        gramm_name = get_name("ax_gramm")
-
-        for para in doc.paragraphs:
-            ft = "".join(r.text for r in para.runs)
-            if "___" in ft and (sev_name or gramm_name):
-                # Signature line
-                new_ft = f"     ___{sev_name}_\t\t\t\t\t{gramm_name} _______________________"
-                if para.runs:
-                    para.runs[0].text = new_ft
-                    for r in para.runs[1:]: r.text = ""
-            elif "Στ" in ft and "αριθ" in ft and not ft.strip().startswith("ΑΝΑΓΓ"):
-                # Header line Σ∴ Στ∴ — already filled in template
-                pass
-
-    # ══════════════════════════════════════════════════════════
-    # FORM 7: ΑΝΑΓΓΕΛΙΑ ΕΓΚΑΤΑΣΤΑΣΕΩΣ ΣΕΒΑΣΜΙΟΥ & ΣΥΜΒΟΥΛΙΟΥ
-    # Απλό έγγραφο — αφήνεται ως template (συμπληρώνεται μετά την έγκριση)
-    # ══════════════════════════════════════════════════════════
-    elif "7_-_ΑΝΑΓΓΕΛΙΑ_ΕΓΚΑΤ" in fname or "ΑΝΑΓΓΕΛΙΑ_ΕΓΚΑΤΑΣΤ" in fname:
-        sev_name = get_name("ax_sev")
-        gramm_name = get_name("ax_gramm")
-        for para in doc.paragraphs:
-            ft = "".join(r.text for r in para.runs)
-            if "___" in ft and (sev_name or gramm_name):
-                new_ft = f"     ___{sev_name}_\t\t\t\t\t{gramm_name} _______________________"
-                if para.runs:
-                    para.runs[0].text = new_ft
-                    for r in para.runs[1:]: r.text = ""
-
-    # ══════════════════════════════════════════════════════════
-    # GENERIC FALLBACK — Claude για τα υπόλοιπα έντυπα
+    # GENERIC FALLBACK — Claude
     # ══════════════════════════════════════════════════════════
     else:
         return _claude_fill_generic(template_path, collected, members_by_field, stoaa_data)
@@ -1293,32 +1111,27 @@ def fill_docx_smart(
     return buf.read()
 
 
+# ══════════════════════════════════════════════════════════════
+# CLAUDE GENERIC FILL
+# ══════════════════════════════════════════════════════════════
 def _claude_fill_generic(
     template_path: str,
     collected: Dict[str, Any],
     members_by_field: Dict[str, Optional[Dict]],
     stoaa_data: Dict[str, str],
 ) -> bytes:
-    """
-    Για μη-εκλογικά έντυπα: Claude επιστρέφει JSON με
-    {table_idx, row_idx, cell_idx, value} και γράφουμε άμεσα.
-    """
     from docx import Document
 
     key = get_anthropic_key()
     if not key:
-        # Επιστρέφει το αρχείο αμετάβλητο
         with open(template_path, "rb") as f:
             return f.read()
 
-    # 1. Κάνε docx → JSON δομή
     doc = Document(template_path)
     doc_structure = {"paragraphs": [], "tables": []}
-
     for i, para in enumerate(doc.paragraphs):
         if para.text.strip():
             doc_structure["paragraphs"].append({"idx": i, "text": para.text[:200]})
-
     for t_i, table in enumerate(doc.tables):
         table_data = {"table_idx": t_i, "rows": []}
         for r_i, row in enumerate(table.rows):
@@ -1328,65 +1141,47 @@ def _claude_fill_generic(
             table_data["rows"].append({"row_idx": r_i, "cells": cells_data})
         doc_structure["tables"].append(table_data)
 
-    # 2. Συλλογή user data
     user_data_flat = {k: str(v or "") for k, v in collected.items()}
-    for field_key, m in members_by_field.items():
+    for fk, m in members_by_field.items():
         if m:
-            user_data_flat[f"{field_key}_full"] = _member_full_name(m)
-            user_data_flat[f"{field_key}_surname"] = m.get('επώνυμο', '')
-            user_data_flat[f"{field_key}_name"] = m.get('όνομα', '')
+            user_data_flat[f"{fk}_full"]    = _member_full_name(m)
+            user_data_flat[f"{fk}_surname"] = m.get('επώνυμο', '')
+            user_data_flat[f"{fk}_name"]    = m.get('όνομα', '')
 
-    # 3. Claude fills JSON
     try:
         import anthropic
         client = anthropic.Anthropic(api_key=key)
-
-        system = """
-Είσαι Γραμματεύς Τεκτονικής Στοάς. Σου δίνεται η JSON δομή ενός εντύπου ΜΣΤΕ
-(paragraphs και tables με ακριβείς συντεταγμένες κελιών) και τα στοιχεία του χρήστη.
-
-Επέστρεψε JSON array με fill instructions:
-[
-  {"type": "table_cell", "table_idx": 0, "row_idx": 2, "cell_idx": 3, "value": "ΠΑΡΙΣΗΣ ΓΕΩΡΓΙΟΣ"},
-  {"type": "paragraph", "para_idx": 5, "old_text": "........", "new_text": "27/04/2026"}
-]
-
-Κανόνες:
-- Γράψε ΜΟΝΟ σε κενά cells ή cells με placeholder (......, tabs)
-- Χρησιμοποίησε επίσημη τεκτονική γλώσσα
-- Μόνο valid JSON array, χωρίς markdown
-""".strip()
-
         msg = client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=3000,
-            system=system,
+            system="""Είσαι Γραμματεύς Τεκτονικής Στοάς. Σου δίνεται JSON δομή εντύπου ΜΣΤΕ και τα στοιχεία.
+Επέστρεψε JSON array fill instructions:
+[
+  {"type":"table_cell","table_idx":0,"row_idx":2,"cell_idx":3,"value":"ΠΑΡΙΣΗΣ ΓΕΩΡΓΙΟΣ"},
+  {"type":"paragraph","para_idx":5,"old_text":"........","new_text":"27/04/2026"}
+]
+Κανόνες: γράψε ΜΟΝΟ σε κενά cells ή placeholders. Επίσημη τεκτονική γλώσσα. Μόνο valid JSON.""",
             messages=[{"role": "user", "content":
                 f"Στοιχεία Στοάς: {stoaa_data}\n\n"
-                f"Δεδομένα χρήστη:\n{json.dumps(user_data_flat, ensure_ascii=False)[:2000]}\n\n"
-                f"Δομή εντύπου:\n{json.dumps(doc_structure, ensure_ascii=False)[:4000]}"
-            }],
+                f"Δεδομένα:\n{json.dumps(user_data_flat, ensure_ascii=False)[:2000]}\n\n"
+                f"Δομή εντύπου:\n{json.dumps(doc_structure, ensure_ascii=False)[:4000]}"}],
         )
-        raw = msg.content[0].text if msg.content else "[]"
-        raw = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
-        raw = re.sub(r"\s*```\s*$", "", raw, flags=re.MULTILINE).strip()
-        raw = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\t]", " ", raw)
+        raw   = msg.content[0].text if msg.content else "[]"
+        raw   = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
+        raw   = re.sub(r"\s*```\s*$", "", raw, flags=re.MULTILINE).strip()
         fills = json.loads(raw)
-
-        # 4. Apply fills
         for fill in fills:
             try:
                 if fill.get("type") == "table_cell":
                     table = doc.tables[fill["table_idx"]]
-                    row = table.rows[fill["row_idx"]]
-                    cell = _unique_cells(row)[fill["cell_idx"]]
+                    row   = table.rows[fill["row_idx"]]
+                    cell  = _unique_cells(row)[fill["cell_idx"]]
                     _write_cell(cell, fill["value"])
                 elif fill.get("type") == "paragraph":
                     para = doc.paragraphs[fill["para_idx"]]
                     _replace_in_para(para, fill.get("old_text", ""), fill["new_text"])
-            except (IndexError, KeyError, Exception):
+            except Exception:
                 pass
-
     except Exception as e:
         st.warning(f"⚠️ Claude error: {e}")
 
@@ -1397,7 +1192,6 @@ def _claude_fill_generic(
 
 
 def create_zip(files: List[Tuple[str, bytes]]) -> bytes:
-    """Create a zip with multiple docx files."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for name, data in files:
@@ -1413,11 +1207,7 @@ col_left, col_right = st.columns([1, 2])
 
 with col_left:
     st.markdown("### 📌 Επιλογή Διαδικασίας")
-    selected = st.selectbox(
-        "Διαδικασία",
-        list(DIKADIKASIEES.keys()),
-        label_visibility="collapsed",
-    )
+    selected = st.selectbox("Διαδικασία", list(DIKADIKASIEES.keys()), label_visibility="collapsed")
 
 proc = DIKADIKASIEES[selected]
 
@@ -1428,29 +1218,26 @@ with col_right:
 
 st.markdown("---")
 
-# ══════════════════════════════════════════════════════════════
-# ΚΑΡΤΕΛΕΣ: Βήματα | Έντυπα | Συμπλήρωση
-# ══════════════════════════════════════════════════════════════
 tab_steps, tab_forms, tab_fill = st.tabs([
     "📋 Βήματα Διαδικασίας",
     "📁 Απαιτούμενα Έντυπα",
     "✍️ Συμπλήρωση & Λήψη",
 ])
 
-# ──────────────────────────────────────────────────────────────
-# TAB 1: ΒΗΜΑΤΑ
-# ──────────────────────────────────────────────────────────────
+
+# ══════════════════════════════════════════════════════════════
+# TAB 1 — ΒΗΜΑΤΑ
+# ══════════════════════════════════════════════════════════════
 with tab_steps:
     st.markdown(f"### Βήματα Διαδικασίας: {selected}")
     st.caption(
         "Βάσει Οδηγού Διαδικασιών & Απαιτούμενων Ενεργειών (Δεκ. 2017) "
         "και Γεν. Κανονισμού ΜΣΤΕ"
     )
-
     for step_num, step_title, refs in proc["steps"]:
-        ref_str = " · ".join(refs) if refs else ""
+        ref_str = " · ".join(refs) if refs and not refs[0].startswith("•") else ""
         with st.expander(f"**Βήμα {step_num}** — {step_title}", expanded=False):
-            if isinstance(refs, list) and refs and refs[0].startswith("•"):
+            if refs and refs[0].startswith("•"):
                 for r in refs:
                     st.markdown(r)
             elif ref_str:
@@ -1458,18 +1245,18 @@ with tab_steps:
             else:
                 st.caption("Εσωτερική διαδικασία Στοάς")
 
-    # Απαιτούμενα έντυπα summary
     st.markdown("---")
     st.markdown("#### 📎 Απαιτούμενα Έντυπα")
     for f in proc["forms"]:
-        path = os.path.join(FORMS_ROOT, f["file"])
+        path   = os.path.join(FORMS_ROOT, f["file"])
         exists = os.path.exists(path)
-        icon = "✅" if exists else "❌"
+        icon   = "✅" if exists else "❌"
         st.markdown(f"{icon} **{f['name']}** — {f['description']}")
 
-# ──────────────────────────────────────────────────────────────
-# TAB 2: ΕΝΤΥΠΑ (preview + download blank)
-# ──────────────────────────────────────────────────────────────
+
+# ══════════════════════════════════════════════════════════════
+# TAB 2 — ΕΝΤΥΠΑ (preview + download κενά)
+# ══════════════════════════════════════════════════════════════
 with tab_forms:
     st.markdown(f"### Έντυπα: {selected}")
     st.caption("Κατεβάστε τα κενά πρότυπα ή δείτε το περιεχόμενό τους.")
@@ -1483,133 +1270,109 @@ with tab_forms:
         if os.path.exists(path):
             with open(path, "rb") as fh:
                 data = fh.read()
-
             col1, col2 = st.columns([1, 3])
             with col1:
-                fname = os.path.basename(f["file"])
+                fname_dl = os.path.basename(f["file"])
                 st.download_button(
-                    f"⬇️ Κενό έντυπο",
-                    data=data,
-                    file_name=fname,
+                    "⬇️ Κενό έντυπο", data=data, file_name=fname_dl,
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    key=f"blank_{f['file']}",
-                    use_container_width=True,
+                    key=f"blank_{f['file']}", use_container_width=True,
                 )
-                all_blank.append((fname, data))
+                all_blank.append((fname_dl, data))
             with col2:
-                with st.expander("👁️ Προβολή κειμένου εντύπου"):
+                with st.expander("👁️ Προβολή κειμένου"):
                     text = read_docx_text(path)
                     st.text(text[:1500] + ("…" if len(text) > 1500 else ""))
         else:
             st.error(f"❌ Δεν βρέθηκε: {path}")
-
         st.markdown("---")
 
     if len(all_blank) > 1:
         zip_data = create_zip(all_blank)
         st.download_button(
-            f"📦 Λήψη όλων των κενών εντύπων (.zip)",
-            data=zip_data,
-            file_name=f"εντυπα_{proc['code']}.zip",
-            mime="application/zip",
+            f"📦 Λήψη όλων των κενών εντύπων (.zip)", data=zip_data,
+            file_name=f"εντυπα_{proc['code']}.zip", mime="application/zip",
             use_container_width=True,
         )
 
-# ──────────────────────────────────────────────────────────────
-# TAB 3: ΣΥΜΠΛΗΡΩΣΗ
-# ──────────────────────────────────────────────────────────────
+
+# ══════════════════════════════════════════════════════════════
+# TAB 3 — ΣΥΜΠΛΗΡΩΣΗ
+# ══════════════════════════════════════════════════════════════
 with tab_fill:
     st.markdown(f"### ✍️ Συμπλήρωση Εντύπων: {selected}")
     st.caption(
         "Εισάγετε τα στοιχεία παρακάτω. Το σύστημα θα προσυμπληρώσει από "
-        "το Μητρώο όπου είναι δυνατό και θα χρησιμοποιήσει Claude για "
-        "αυτόματη συμπλήρωση των εντύπων."
+        "το Μητρώο όπου είναι δυνατό."
     )
 
-    # Φόρτωση μελών
     members_dict = load_members_dict()
 
     def member_selectbox(label: str, key: str) -> Optional[Dict]:
-        """Selectbox επιλογής μέλους."""
         options = {0: "— Επιλογή μέλους —"}
         for mid, m in members_dict.items():
             options[mid] = f"{m.get('επώνυμο','')} {m.get('όνομα','')} ({m.get('τεκτονικός_βαθμός','')})"
-        sel = st.selectbox(label, list(options.keys()),
-                           format_func=lambda x: options[x], key=key)
+        sel = st.selectbox(label, list(options.keys()), format_func=lambda x: options[x], key=key)
         return members_dict.get(sel) if sel else None
 
-    # Συλλογή δεδομένων ανά group
-    collected: Dict[str, Any] = {}
-    member_refs: Dict[str, Optional[Dict]] = {}  # field_id → member dict
+    collected:    Dict[str, Any]           = {}
+    member_refs:  Dict[str, Optional[Dict]] = {}
 
     for group in proc["input_groups"]:
         st.markdown(f"#### {group['title']}")
-        cols = st.columns(2)
+        cols    = st.columns(2)
         col_idx = 0
 
         for field_id, field_label, field_type, default in group["fields"]:
             if field_type == "auto":
-                continue  # will be filled from member_refs
+                continue
 
             with cols[col_idx % 2]:
                 if field_type == "text":
-                    collected[field_id] = st.text_input(
-                        field_label, value=str(default), key=f"inp_{field_id}")
+                    collected[field_id] = st.text_input(field_label, value=str(default), key=f"inp_{field_id}")
                 elif field_type == "textarea":
-                    collected[field_id] = st.text_area(
-                        field_label, value=str(default), height=80, key=f"inp_{field_id}")
+                    collected[field_id] = st.text_area(field_label, value=str(default), height=80, key=f"inp_{field_id}")
                 elif field_type == "date":
                     try:
                         d = date.fromisoformat(default) if default else date.today()
                     except Exception:
                         d = date.today()
-                    collected[field_id] = st.date_input(
-                        field_label, value=d, key=f"inp_{field_id}"
-                    ).strftime("%d/%m/%Y")
+                    collected[field_id] = st.date_input(field_label, value=d, key=f"inp_{field_id}").strftime("%d/%m/%Y")
                 elif field_type == "number":
-                    collected[field_id] = st.number_input(
-                        field_label, min_value=0, value=int(default) if default else 0,
-                        key=f"inp_{field_id}")
+                    collected[field_id] = st.number_input(field_label, min_value=0,
+                                                           value=int(default) if default else 0,
+                                                           key=f"inp_{field_id}")
                 elif field_type == "select":
                     opts = default if isinstance(default, list) else [default]
-                    collected[field_id] = st.selectbox(
-                        field_label, opts, key=f"inp_{field_id}")
+                    collected[field_id] = st.selectbox(field_label, opts, key=f"inp_{field_id}")
                 elif field_type == "member":
                     sel_member = member_selectbox(field_label, key=f"inp_{field_id}")
                     member_refs[field_id] = sel_member
-                    if sel_member:
-                        collected[field_id] = member_display_name(sel_member)
-                    else:
-                        collected[field_id] = ""
+                    collected[field_id]   = member_display_name(sel_member) if sel_member else ""
                 elif field_type == "multiselect_members":
-                    # Multiselect για ψηφίσαντες
                     options_map = {}
                     for mid, m in members_dict.items():
-                        label = f"{m.get('επώνυμο','')} {m.get('όνομα','')} (ΑΜΜΣ: {m.get('αρ_μητρώου_μσ','')})"
-                        options_map[label] = m
+                        lbl = f"{m.get('επώνυμο','')} {m.get('όνομα','')} (ΑΜΜΣ: {m.get('αρ_μητρώου_μσ','')})"
+                        options_map[lbl] = m
                     selected_labels = st.multiselect(
-                        field_label,
-                        list(options_map.keys()),
+                        field_label, list(options_map.keys()),
                         key=f"inp_{field_id}",
-                        help="Επιλέξτε όλους τους Διδ. που ψήφισαν (ταξινομούνται αυτόματα κατά ΑΜΜΣ)"
+                        help="Επιλέξτε όλους τους Διδ. που ψήφισαν (ταξινομούνται κατά ΑΜΜΣ)"
                     )
-                    # Αποθήκευση ως λίστα dicts για τη form 5
                     psif_list = []
                     for lbl in selected_labels:
                         m = options_map[lbl]
                         psif_list.append({
-                            "amms": str(m.get("αρ_μητρώου_μσ","") or ""),
+                            "amms": str(m.get("αρ_μητρώου_μσ", "") or ""),
                             "name": f"{m.get('επώνυμο','')} {m.get('όνομα','')}".strip(),
                         })
-                    # Ταξινόμηση κατά ΑΜΜΣ
                     psif_list.sort(key=lambda x: int(x["amms"]) if str(x["amms"]).isdigit() else 99999)
-                    collected[field_id] = json.dumps(psif_list, ensure_ascii=False)
+                    collected[field_id]         = json.dumps(psif_list, ensure_ascii=False)
                     collected["psifisantes_list"] = psif_list
                     if psif_list:
-                        # Ενημέρωση πλήθους ψηφισάντων αν δεν έχει συμπληρωθεί
-                        if not collected.get("ekl_psifisantes") or collected.get("ekl_psifisantes") == "0":
+                        if not collected.get("ekl_psifisantes") or str(collected.get("ekl_psifisantes")) == "0":
                             collected["ekl_psifisantes"] = str(len(psif_list))
-                        st.caption(f"✅ {len(psif_list)} ψηφίσαντες επιλέχθηκαν")
+                        st.caption(f"✅ {len(psif_list)} ψηφίσαντες")
 
             col_idx += 1
 
@@ -1617,20 +1380,16 @@ with tab_fill:
         for field_id, field_label, field_type, default in group["fields"]:
             if field_type != "auto":
                 continue
-            # Find the "member" field in same group
-            base_id = field_id.rsplit("_", 1)[0]  # e.g. "yp_eponimo" → look for "yp_melos"
-            # Try to find a member ref with matching prefix
             ref_member = None
             for mid_key, mref in member_refs.items():
-                if mid_key.startswith(base_id.rsplit("_", 1)[0]) or base_id.startswith(mid_key.rsplit("_", 1)[0]):
+                if mid_key.startswith(field_id.rsplit("_", 1)[0]) or \
+                   field_id.startswith(mid_key.rsplit("_", 1)[0]):
                     ref_member = mref
                     break
-                # Simple fallback: first member ref in group
                 if not ref_member and mref:
                     ref_member = mref
-
             if ref_member:
-                suffix = field_id.split("_")[-1]
+                suffix  = field_id.split("_")[-1]
                 mapping = {
                     "eponimo":   ref_member.get("επώνυμο", ""),
                     "onoma":     ref_member.get("όνομα", ""),
@@ -1645,144 +1404,130 @@ with tab_fill:
 
         st.markdown("---")
 
-    # Επιπλέον σχόλια
     extra_notes = st.text_area(
-        "📝 Επιπλέον σχόλια / οδηγίες για τη συμπλήρωση",
+        "📝 Επιπλέον σχόλια / οδηγίες",
         height=70,
-        placeholder="π.χ. ειδικές παρατηρήσεις, σημειώσεις για Claude…",
+        placeholder="π.χ. ειδικές παρατηρήσεις, σημειώσεις…",
         key="extra_notes",
     )
 
-    # ── ΚΟΥΜΠΙ ΣΥΜΠΛΗΡΩΣΗΣ ───────────────────────────────────
+    # ── ΚΟΥΜΠΙ ΦΟΡΤΩΣΗΣ ──────────────────────────────────────
     st.markdown("---")
+    if st.button("🤖 Αυτόματη Συμπλήρωση από Μητρώο", type="primary",
+                 use_container_width=True, key="run_fill"):
 
-    if st.button(
-        "🤖 Αυτόματη Συμπλήρωση από Μητρώο",
-        type="primary",
-        use_container_width=True,
-        key="run_fill",
-    ):
-        # Αποθηκεύουμε τα fill specs στο session_state
-        stoaa_data = {"name": STOAA_NAME, "number": STOAA_NUMBER, "anatoli": STOAA_ANATOLI}
+        stoaa_data_d = {"name": STOAA_NAME, "number": STOAA_NUMBER, "anatoli": STOAA_ANATOLI}
+        data_for_fill = {k: str(v) if v is not None else "" for k, v in collected.items()}
 
-        data_for_fill = {}
-        for k, v in collected.items():
-            data_for_fill[k] = str(v) if v is not None else ""
-
-        # Για εκλογές: φτιάχνουμε spec αξιωματικών
         if proc["code"] == "ekloges":
             officials_spec = []
             for axioma_text, field_key in [
-                ("ΣΕΒΑΣΜΙΟΣ",            "ax_sev"),
-                ("Α΄ ΕΠΟΠΤΗΣ",           "ax_a_ep"),
-                ("Β΄ ΕΠΟΠΤΗΣ",           "ax_b_ep"),
-                ("ΡΗΤΩΡ",                "ax_rhtor"),
-                ("ΓΡΑΜΜ. - ΣΦΡΑΓΙΔ.",   "ax_gramm"),
-                ("Α΄ ΔΟΚΙΜΑΣΤΗΣ",        "ax_a_dok"),
-                ("ΤΑΜΙΑΣ",               "ax_tamias"),
-                ("ΕΛΕΟΝΟΜΟΣ",            "ax_eleon"),
-                ("ΤΕΛΕΤΑΡΧΗΣ",           "ax_tel"),
-                ("ΣΤΕΓΑΣΤΗΣ",            "ax_steg"),
-                ("Β΄ ΔΟΚΙΜΑΣΤΗΣ",        "ax_b_dok"),
-                ("ΑΡΧΙΤ. - ΑΡΧΙΤΡ.",    "ax_arxitekt"),
-                ("ΑΡΧΕΙΟΦ. - ΒΙΒΛΙΟΦ.", "ax_arxif"),
-                ("ΞΙΦΟΦ. - ΣΗΜΑΙΟΦ.",   "ax_xifok"),
-                ("ΡΗΤΩΡ (Πρόσθ.)",       "pr_rhtor"),
-                ("ΓΡΑΜΜ. - ΣΦΡΑΓΙΔ. (Πρόσθ.)", "pr_gramm"),
-                ("ΤΑΜΙΑΣ (Πρόσθ.)",      "pr_tamias"),
-                ("ΕΛΕΟΝΟΜΟΣ (Πρόσθ.)",   "pr_eleon"),
-                ("ΤΕΛΕΤΑΡΧΗΣ (Πρόσθ.)",  "pr_tel"),
-                ("ΜΕΛΟΣ ΕΞ.ΕΠ. Α",       "ex_1"),
-                ("ΜΕΛΟΣ ΕΞ.ΕΠ. Β",       "ex_2"),
-                ("ΜΕΛΟΣ ΕΞ.ΕΠ. Γ",       "ex_3"),
+                ("ΣΕΒΑΣΜΙΟΣ",                 "ax_sev"),
+                ("Α΄ ΕΠΟΠΤΗΣ",                "ax_a_ep"),
+                ("Β΄ ΕΠΟΠΤΗΣ",                "ax_b_ep"),
+                ("ΡΗΤΩΡ",                     "ax_rhtor"),
+                ("ΓΡΑΜΜ. - ΣΦΡΑΓΙΔ.",        "ax_gramm"),
+                ("Α΄ ΔΟΚΙΜΑΣΤΗΣ",             "ax_a_dok"),
+                ("ΤΑΜΙΑΣ",                    "ax_tamias"),
+                ("ΕΛΕΟΝΟΜΟΣ",                 "ax_eleon"),
+                ("ΤΕΛΕΤΑΡΧΗΣ",                "ax_tel"),
+                ("ΣΤΕΓΑΣΤΗΣ",                 "ax_steg"),
+                ("Β΄ ΔΟΚΙΜΑΣΤΗΣ",             "ax_b_dok"),
+                ("ΑΡΧΙΤ. - ΑΡΧΙΤΡ.",         "ax_arxitekt"),
+                ("ΑΡΧΕΙΟΦ. - ΒΙΒΛΙΟΦ.",      "ax_arxif"),
+                ("ΞΙΦΟΦ. - ΣΗΜΑΙΟΦ.",        "ax_xifok"),
+                ("ΡΗΤΩΡ (Πρόσθ.)",            "pr_rhtor"),
+                ("ΓΡΑΜΜ. - ΣΦΡΑΓΙΔ. (Πρόσθ.)","pr_gramm"),
+                ("ΤΑΜΙΑΣ (Πρόσθ.)",           "pr_tamias"),
+                ("ΕΛΕΟΝΟΜΟΣ (Πρόσθ.)",        "pr_eleon"),
+                ("ΤΕΛΕΤΑΡΧΗΣ (Πρόσθ.)",       "pr_tel"),
+                ("ΜΕΛΟΣ ΕΞ.ΕΠ. Α",            "ex_1"),
+                ("ΜΕΛΟΣ ΕΞ.ΕΠ. Β",            "ex_2"),
+                ("ΜΕΛΟΣ ΕΞ.ΕΠ. Γ",            "ex_3"),
             ]:
                 m = member_refs.get(field_key)
                 officials_spec.append({
-                    "Αξίωμα": axioma_text,
-                    "Επώνυμο": m.get("επώνυμο", "") if m else "",
-                    "Όνομα": m.get("όνομα", "") if m else "",
-                    "Πατρώνυμο": m.get("πατρώνυμο", "") if m else "",
-                    "Α.Μ.Μ.Σ.": str(m.get("αρ_μητρώου_μσ", "") or "") if m else "",
-                    "Κινητό": m.get("κινητό", "") or m.get("κινητο", "") if m else "",
-                    "Email": m.get("email", "") if m else "",
-                    "Διεύθυνση": m.get("διεύθυνση", "") if m else "",
-                    "Πόλη": m.get("πόλη", "") if m else "",
+                    "Αξίωμα":    axioma_text,
+                    "Επώνυμο":   m.get("επώνυμο", "") if m else "",
+                    "Όνομα":     m.get("όνομα", "")   if m else "",
+                    "Πατρώνυμο": m.get("πατρώνυμο","") if m else "",
+                    "Α.Μ.Μ.Σ.":  str(m.get("αρ_μητρώου_μσ","") or "") if m else "",
+                    "Κινητό":    m.get("κινητό","") or m.get("κινητο","") if m else "",
+                    "Email":     m.get("email","") if m else "",
+                    "Διεύθυνση": m.get("διεύθυνση","") if m else "",
+                    "Πόλη":      m.get("πόλη","") if m else "",
                     "_field_key": field_key,
                 })
-
             st.session_state[f"fill_officials_{proc['code']}"] = officials_spec
             st.session_state[f"fill_header_{proc['code']}"] = {
-                "Τεκτ. Διετία": data_for_fill.get("ekl_diettia", "2024-2026"),
-                "Ημ/νία Αρχαιρεσιών": data_for_fill.get("ekl_imerominia", ""),
-                "Ψηφίσαντες": data_for_fill.get("ekl_psifisantes", ""),
-                "Παρόντες": data_for_fill.get("ekl_paronton", ""),
+                "Τεκτ. Διετία":         data_for_fill.get("ekl_diettia", "2024-2026"),
+                "Ημ/νία Αρχαιρεσιών":  data_for_fill.get("ekl_imerominia", ""),
+                "Ψηφίσαντες":          data_for_fill.get("ekl_psifisantes", ""),
+                "Παρόντες":            data_for_fill.get("ekl_paronton", ""),
+                "Ημ/νία Εγκατάστασης": data_for_fill.get("egkat_imerominia", ""),
+                "Αρ. Πρωτ. Εγκριτικού":data_for_fill.get("egkat_egk_proto", ""),
+                "Τύπος Εκλογών":       data_for_fill.get("emvolimes", "Τακτικές εκλογές (Οκτώβριος)"),
+                "Λόγος Εμβόλιμων":     data_for_fill.get("emvolimes_logos", ""),
             }
 
-        st.session_state[f"fill_data_{proc['code']}"] = data_for_fill
-        st.session_state[f"fill_members_{proc['code']}"] = {
-            k: v for k, v in member_refs.items() if v
-        }
-        st.session_state[f"fill_stoaa_{proc['code']}"] = stoaa_data
+        st.session_state[f"fill_data_{proc['code']}"]    = data_for_fill
+        st.session_state[f"fill_members_{proc['code']}"] = {k: v for k, v in member_refs.items() if v}
+        st.session_state[f"fill_stoaa_{proc['code']}"]   = stoaa_data_d
         st.success("✅ Δεδομένα φορτώθηκαν. Ελέγξτε/διορθώστε παρακάτω και κατεβάστε.")
 
     # ══════════════════════════════════════════════════════════
-    # EDITOR — Εμφανίζεται αν υπάρχουν δεδομένα στο session_state
+    # EDITOR
     # ══════════════════════════════════════════════════════════
     if f"fill_data_{proc['code']}" in st.session_state:
         st.markdown("---")
         st.markdown("### ✏️ Επεξεργασία & Λήψη Εντύπων")
         st.caption("Διορθώστε χειροκίνητα οποιοδήποτε πεδίο και μετά κατεβάστε.")
 
-        stoaa_data = st.session_state.get(f"fill_stoaa_{proc['code']}",
-                                          {"name": STOAA_NAME, "number": STOAA_NUMBER,
-                                           "anatoli": STOAA_ANATOLI})
+        stoaa_data_d = st.session_state.get(f"fill_stoaa_{proc['code']}",
+                                             {"name": STOAA_NAME, "number": STOAA_NUMBER,
+                                              "anatoli": STOAA_ANATOLI})
         data_for_fill = st.session_state[f"fill_data_{proc['code']}"]
-        saved_members = st.session_state.get(f"fill_members_{proc['code']}", {})
+        saved_members = st.session_state.get(f"fill_members_{proc['code']}",{})
 
-        # ── ΕΚΛΟΓΕΣ: Editable grid αξιωματικών ──────────────
+        # ── Εκλογές: editable grid ────────────────────────────
         if proc["code"] == "ekloges":
-            header_data = st.session_state.get(f"fill_header_{proc['code']}", {})
+            header_data    = st.session_state.get(f"fill_header_{proc['code']}", {})
             officials_spec = st.session_state.get(f"fill_officials_{proc['code']}", [])
 
-            # Επεξεργασία header fields
-            st.markdown("#### 🏛️ Στοιχεία Αρχαιρεσιών")
-            hcols = st.columns(4)
+            st.markdown("#### 🏛️ Στοιχεία Αρχαιρεσιών & Εγκατάστασης")
+            hcols        = st.columns(4)
             edited_header = {}
             for i, (k, v) in enumerate(header_data.items()):
                 edited_header[k] = hcols[i % 4].text_input(k, value=str(v),
                                                              key=f"hdr_{proc['code']}_{k}")
             st.session_state[f"fill_header_{proc['code']}"] = edited_header
 
-            # Επεξεργασία πίνακα αξιωματικών
+            # Εμβόλιμες εκλογές info
+            if "Εμβόλιμες" in edited_header.get("Τύπος Εκλογών", ""):
+                st.info(
+                    f"⚡ **Εμβόλιμες Εκλογές** — "
+                    f"Λόγος: {edited_header.get('Λόγος Εμβόλιμων','—')}"
+                )
+
             st.markdown("#### 👥 Πίνακας Αξιωματικών")
-            st.caption("Επεξεργαστείτε απευθείας οποιοδήποτε κελί.")
-
             import pandas as pd
-            df = pd.DataFrame([
-                {k: v for k, v in row.items() if k != "_field_key"}
-                for row in officials_spec
-            ])
-
+            df = pd.DataFrame([{k: v for k, v in row.items() if k != "_field_key"}
+                                for row in officials_spec])
             edited_df = st.data_editor(
-                df,
-                use_container_width=True,
-                hide_index=True,
+                df, use_container_width=True, hide_index=True,
                 column_config={
-                    "Αξίωμα": st.column_config.TextColumn("Αξίωμα", disabled=True, width="medium"),
-                    "Επώνυμο": st.column_config.TextColumn("Επώνυμο", width="medium"),
-                    "Όνομα": st.column_config.TextColumn("Όνομα", width="medium"),
+                    "Αξίωμα":    st.column_config.TextColumn("Αξίωμα",    disabled=True, width="medium"),
+                    "Επώνυμο":   st.column_config.TextColumn("Επώνυμο",   width="medium"),
+                    "Όνομα":     st.column_config.TextColumn("Όνομα",     width="medium"),
                     "Πατρώνυμο": st.column_config.TextColumn("Πατρώνυμο", width="small"),
-                    "Α.Μ.Μ.Σ.": st.column_config.TextColumn("Α.Μ.Μ.Σ.", width="small"),
-                    "Κινητό": st.column_config.TextColumn("Κινητό", width="small"),
-                    "Email": st.column_config.TextColumn("Email", width="medium"),
+                    "Α.Μ.Μ.Σ.":  st.column_config.TextColumn("Α.Μ.Μ.Σ.",  width="small"),
+                    "Κινητό":    st.column_config.TextColumn("Κινητό",    width="small"),
+                    "Email":     st.column_config.TextColumn("Email",     width="medium"),
                     "Διεύθυνση": st.column_config.TextColumn("Διεύθυνση", width="medium"),
-                    "Πόλη": st.column_config.TextColumn("Πόλη", width="small"),
+                    "Πόλη":      st.column_config.TextColumn("Πόλη",      width="small"),
                 },
-                key=f"editor_grid_{proc['code']}",
-                num_rows="fixed",
+                key=f"editor_grid_{proc['code']}", num_rows="fixed",
             )
-
-            # Αποθήκευση επεξεργασμένου πίνακα
             updated_officials = []
             for i, row in edited_df.iterrows():
                 entry = row.to_dict()
@@ -1791,32 +1536,29 @@ with tab_fill:
             st.session_state[f"fill_officials_{proc['code']}"] = updated_officials
 
         else:
-            # Για μη-εκλογικά: απλά text inputs
             st.markdown("#### 📝 Στοιχεία Εντύπου")
-            edit_cols = st.columns(2)
+            edit_cols   = st.columns(2)
             edited_data = {}
             for i, (k, v) in enumerate(data_for_fill.items()):
                 if k == "extra_notes":
                     continue
-                edited_data[k] = edit_cols[i % 2].text_input(
-                    k, value=str(v), key=f"edit_{proc['code']}_{k}")
+                edited_data[k] = edit_cols[i % 2].text_input(k, value=str(v),
+                                                               key=f"edit_{proc['code']}_{k}")
             st.session_state[f"fill_data_{proc['code']}"] = edited_data
 
-        # ── ΚΟΥΜΠΙ ΔΗΜΙΟΥΡΓΙΑΣ ΕΝΤΥΠΩΝ ───────────────────────
+        # ── ΔΗΜΙΟΥΡΓΙΑ ΕΝΤΥΠΩΝ ────────────────────────────────
         st.markdown("---")
         st.markdown("### 📄 Δημιουργία & Λήψη Εντύπων")
 
-        if st.button("📄 Δημιουργία εντύπων από τα παραπάνω δεδομένα",
-                     type="primary", use_container_width=True, key="gen_from_edit"):
+        if st.button("📄 Δημιουργία εντύπων", type="primary",
+                     use_container_width=True, key="gen_from_edit"):
 
             filled_files: List[Tuple[str, bytes]] = []
             progress = st.progress(0)
-            n_forms = len(proc["forms"])
+            n_forms  = len(proc["forms"])
 
-            # Ανακατασκευή member_refs από τον edited grid (για εκλογές)
             if proc["code"] == "ekloges":
                 updated_spec = st.session_state.get(f"fill_officials_{proc['code']}", [])
-                # Φτιάχνουμε ψεύτικα member dicts από τον edited πίνακα
                 rebuilt_members: Dict[str, Optional[Dict]] = {}
                 for row in updated_spec:
                     fk = row.get("_field_key", "")
@@ -1831,13 +1573,16 @@ with tab_fill:
                             "διεύθυνση":     row.get("Διεύθυνση", ""),
                             "πόλη":          row.get("Πόλη", ""),
                         }
-                # Ενημέρωση header data
-                hdr = st.session_state.get(f"fill_header_{proc['code']}", {})
+                hdr             = st.session_state.get(f"fill_header_{proc['code']}", {})
                 final_collected = dict(data_for_fill)
-                final_collected["ekl_diettia"] = hdr.get("Τεκτ. Διετία", "2024-2026")
-                final_collected["ekl_imerominia"] = hdr.get("Ημ/νία Αρχαιρεσιών", "")
-                final_collected["ekl_psifisantes"] = hdr.get("Ψηφίσαντες", "")
-                final_collected["ekl_paronton"] = hdr.get("Παρόντες", "")
+                final_collected["ekl_diettia"]       = hdr.get("Τεκτ. Διετία", "2024-2026")
+                final_collected["ekl_imerominia"]    = hdr.get("Ημ/νία Αρχαιρεσιών", "")
+                final_collected["ekl_psifisantes"]   = hdr.get("Ψηφίσαντες", "")
+                final_collected["ekl_paronton"]      = hdr.get("Παρόντες", "")
+                final_collected["egkat_imerominia"]  = hdr.get("Ημ/νία Εγκατάστασης", "")
+                final_collected["egkat_egk_proto"]   = hdr.get("Αρ. Πρωτ. Εγκριτικού", "")
+                final_collected["emvolimes"]         = hdr.get("Τύπος Εκλογών", "")
+                final_collected["emvolimes_logos"]   = hdr.get("Λόγος Εμβόλιμων", "")
             else:
                 rebuilt_members = saved_members
                 final_collected = st.session_state.get(f"fill_data_{proc['code']}", data_for_fill)
@@ -1857,19 +1602,17 @@ with tab_fill:
                             form_file_key=form_info["file"],
                             collected=final_collected,
                             members_by_field=rebuilt_members,
-                            stoaa_data=stoaa_data,
+                            stoaa_data=stoaa_data_d,
                         )
 
-                    fname = os.path.basename(form_info["file"])
-                    filled_files.append((fname, filled_bytes))
+                    fname_out = os.path.basename(form_info["file"])
+                    filled_files.append((fname_out, filled_bytes))
 
                     st.download_button(
                         f"⬇️ {form_info['name']}",
-                        data=filled_bytes,
-                        file_name=fname,
+                        data=filled_bytes, file_name=fname_out,
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        key=f"dl_filled_{i}_{proc['code']}",
-                        use_container_width=True,
+                        key=f"dl_filled_{i}_{proc['code']}", use_container_width=True,
                     )
                     st.success(f"✅ {form_info['name']}")
 
@@ -1881,11 +1624,9 @@ with tab_fill:
             if len(filled_files) > 1:
                 zip_data = create_zip(filled_files)
                 st.download_button(
-                    "📦 Λήψη όλων (.zip)",
-                    data=zip_data,
+                    "📦 Λήψη όλων (.zip)", data=zip_data,
                     file_name=f"εντυπα_{proc['code']}_{date.today().strftime('%Y%m%d')}.zip",
-                    mime="application/zip",
-                    use_container_width=True,
+                    mime="application/zip", use_container_width=True,
                     key=f"dl_zip_{proc['code']}",
                 )
 
