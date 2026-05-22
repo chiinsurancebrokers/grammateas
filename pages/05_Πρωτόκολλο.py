@@ -110,16 +110,19 @@ def get_file(proto_id: int):
     return (row[0], row[1], row[2]) if row and row[0] else (None, None, None)
 
 
+_preview_counter = [0]
+
 def render_preview(file_bytes: bytes, filename: str, mime: str):
     """
     Προεπισκόπηση αρχείου.
     PDF → εξαγωγή κειμένου (το Chrome μπλοκάρει data: iframes).
     DOCX → εξαγωγή κειμένου.
     """
+    _preview_counter[0] += 1
     text = extract_text(file_bytes, filename, mime or "")
     if text and not text.startswith("[Σφάλμα"):
         st.text_area("📄 Περιεχόμενο εγγράφου", value=text, height=420,
-                     disabled=True, label_visibility="visible")
+                     disabled=True, key=f"preview_text_{_preview_counter[0]}")
     else:
         st.info("Δεν ήταν δυνατή η προεπισκόπηση. Χρησιμοποιήστε το κουμπί λήψης.")
 
