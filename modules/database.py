@@ -29,12 +29,25 @@ DB_PATH = os.environ.get("DB_PATH", "/data/grammateas.db")
 ]
 
 
-def get_conn() -> sqlite3.Connection:
-    # Δημιουργία φακέλου αν δεν υπάρχει (π.χ. /data στο Railway)
-    db_dir = os.path.dirname(DB_PATH)
+def _resolve_db_path() -> str:
+    """
+    Επιστρέφει το path του DB.
+    - Railway: /data/grammateas.db  (persistent volume)
+    - Streamlit Cloud / τοπικά: grammateas.db  (τρέχων φάκελος)
+    """
+    path = DB_PATH
+    db_dir = os.path.dirname(path)
     if db_dir:
-        os.makedirs(db_dir, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        try:
+            os.makedirs(db_dir, exist_ok=True)
+        except (PermissionError, OSError):
+            # Fallback σε τρέχοντα φάκελο (Streamlit Cloud κλπ)
+            path = "grammateas.db"
+    return path
+
+
+def get_conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(_resolve_db_path(), check_same_thread=False)
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
