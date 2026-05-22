@@ -9,7 +9,8 @@ from datetime import datetime, date, timedelta
 from typing import Optional, Dict, List
 import json
 
-DB_PATH = "grammateas.db"
+import os
+   DB_PATH = os.environ.get("DB_PATH", "grammateas.db")
 
 ΒΑΘΜΟΙ = ["Μαθητής", "Εταίρος", "Διδάσκαλος"]
 ΚΑΤΑΣΤΑΣΕΙΣ_ΜΕΛΟΥΣ = ["Ενεργός", "Ανενεργός", "Επίτιμος", "Αποχωρήσας", "Αποβιώσας", "Διαγραφείς"]
