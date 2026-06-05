@@ -57,6 +57,11 @@ STOAA_NAME    = "ΑΚΡΟΠΟΛΙΣ"
 STOAA_NUMBER  = "84"
 STOAA_ANATOLI = "Αθηνών"
 
+# Μήνες σε γενική (για ημερομηνίες τύπου «8η Ιανουαρίου 2026»)
+MONTHS_GEN = ["", "Ιανουαρίου", "Φεβρουαρίου", "Μαρτίου", "Απριλίου", "Μαΐου",
+              "Ιουνίου", "Ιουλίου", "Αυγούστου", "Σεπτεμβρίου", "Οκτωβρίου",
+              "Νοεμβρίου", "Δεκεμβρίου"]
+
 # ══════════════════════════════════════════════════════════════
 # ΔΙΑΔΙΚΑΣΙΕΣ
 # ══════════════════════════════════════════════════════════════
@@ -502,6 +507,32 @@ DIKADIKASIEES: Dict[str, Dict] = {
             "Επίσημη γλώσσα και τεκτονικές συντομογραφίες."
         ),
     },
+
+    "📜 Βεβαίωση Παρακολούθησης Επισκέπτη": {
+        "code": "veveosi_episkepti",
+        "custom_pdf": True,
+        "subtitle": "Σημείωμα προς τη Στοά προελεύσεως",
+        "description": (
+            "Έκδοση Σημειώματος προς τη Στοά προελεύσεως ενός επισκέπτη Αδελφού, "
+            "με το οποίο βεβαιώνεται η παρουσία του ως επισκέπτη σε συγκεκριμένες "
+            "Συνεδρίες της Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ υπ' αρ. 84. Το έγγραφο παράγεται "
+            "απευθείας σε PDF, έτοιμο για εκτύπωση, υπογραφή και σφράγιση."
+        ),
+        "deadline_note": (
+            "📝 Το Σημείωμα υπογράφεται από τον Γραμματέα «Κατ' εντολήν» και "
+            "φέρει τη σφραγίδα της Στοάς."
+        ),
+        "steps": [
+            ("1", "Καταγραφή των ημερομηνιών παρουσίας του επισκέπτη στο Βιβλίο Παρουσιών", []),
+            ("2", "Συμπλήρωση στοιχείων επισκέπτη & Στοάς προελεύσεως", []),
+            ("3", "Έκδοση & εκτύπωση του Σημειώματος (PDF)", []),
+            ("4", "Υπογραφή από τον Γραμματέα & σφράγισμα", []),
+            ("5", "Αποστολή στη Στοά προελεύσεως του επισκέπτη", []),
+        ],
+        "forms": [],
+        "input_groups": [],
+        "claude_hint": "",
+    },
 }
 
 
@@ -681,6 +712,198 @@ def _fmt_date_gr(d: str) -> str:
         except Exception:
             pass
     return d or "——"
+
+
+# ══════════════════════════════════════════════════════════════
+# ΒΕΒΑΙΩΣΗ ΠΑΡΑΚΟΛΟΥΘΗΣΗΣ ΕΠΙΣΚΕΠΤΗ (Σημείωμα → PDF)
+# ══════════════════════════════════════════════════════════════
+def _dates_to_text(dates: List[date]) -> str:
+    """Λίστα ημερομηνιών → «την 27η Νοεμβρίου 2025, την 11η Δεκεμβρίου 2025 και την 8η Ιανουαρίου 2026»."""
+    parts = [f"την {d.day}η {MONTHS_GEN[d.month]} {d.year}" for d in dates]
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return parts[0]
+    return ", ".join(parts[:-1]) + " και " + parts[-1]
+
+
+def generate_veveosi_pdf(data: Dict[str, Any]) -> io.BytesIO:
+    """Δημιουργεί το Σημείωμα παρακολούθησης επισκέπτη σε PDF (layout βάσει προτύπου Στοάς)."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import cm
+    from reportlab.lib import colors
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, HRFlowable)
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    # ── Γραμματοσειρές DejaVu (πλήρης υποστήριξη ελληνικών) ──
+    _fonts_base = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts")
+    for alias, fn in {"DSS": "DejaVuSans.ttf", "DSSB": "DejaVuSans-Bold.ttf"}.items():
+        if alias not in pdfmetrics.getRegisteredFontNames():
+            try:
+                pdfmetrics.registerFont(TTFont(alias, os.path.join(_fonts_base, fn)))
+            except Exception:
+                pass
+
+    NAVY = colors.HexColor("#1a2a4a")
+
+    def S(**kw):
+        defaults = dict(fontName="DSS", fontSize=11, spaceAfter=6, leading=16)
+        defaults.update(kw)
+        return ParagraphStyle(str(hash(str(kw))), **defaults)
+
+    CB   = S(fontName="DSSB", fontSize=11, alignment=TA_CENTER, spaceAfter=2)
+    CC   = S(fontName="DSS",  fontSize=11, alignment=TA_CENTER, spaceAfter=2)
+    LEFT = S(fontName="DSS",  fontSize=11, alignment=TA_LEFT)
+    TIT  = S(fontName="DSSB", fontSize=13, alignment=TA_CENTER, spaceBefore=12, spaceAfter=6)
+    BOD  = S(fontName="DSS",  fontSize=11, alignment=TA_JUSTIFY, leading=18, spaceAfter=10)
+
+    story = []
+
+    # Κεφαλίδα
+    story += [
+        Paragraph("Ε∴Δ∴Τ∴Μ∴Α∴Τ∴Σ∴", CB),
+        Paragraph("Εν Ονόματι και Υπό την Αιγίδα", CC),
+        Paragraph("της Μεγάλης Στοάς της Ελλάδος", CC),
+        Paragraph("των Αρχαίων Ελευθέρων και Αποδεδεγμένων Τεκτόνων", CC),
+        Spacer(1, .3 * cm),
+    ]
+    if data.get("αρ_πρωτ"):
+        story.append(Paragraph(f"Α. Πρωτ. {data['αρ_πρωτ']}", LEFT))
+    story.append(Spacer(1, .2 * cm))
+    story.append(Paragraph(
+        f"<b>Σ∴ Στ∴ {STOAA_NAME} υπ' αρ. {STOAA_NUMBER} εν Ανατολή {STOAA_ANATOLI}</b>", CB))
+    story.append(Spacer(1, .2 * cm))
+    story.append(HRFlowable(width="100%", thickness=1.2, color=NAVY, spaceAfter=8))
+
+    # Τίτλος & παραλήπτης
+    story.append(Paragraph("ΣΗΜΕΙΩΜΑ", TIT))
+    story.append(Paragraph(
+        f"Προς την Σ∴ Στ∴ {data['στοά_προς']} υπ' αρ. {data['αρ_προς']} "
+        f"εν Ανατολή {data.get('ανατολή_προς', 'Αθηνών')}", CC))
+    story.append(Spacer(1, .5 * cm))
+
+    # Προσφώνηση & σώμα
+    story.append(Paragraph("Αδ∴ Σεβ∴", LEFT))
+    story.append(Spacer(1, .2 * cm))
+    story.append(Paragraph(
+        f"Σας γνωρίζουμε ότι ο {data.get('βαθμός', 'Αδ∴')} μέλος σας "
+        f"<b>{data['επισκέπτης']}</b>, παρευρέθηκε ως επισκέπτης, "
+        f"{data['ημερομηνίες_str']}, στις Συνεδρίες της Στ∴ μας "
+        f"{STOAA_NAME} υπ' αρ. {STOAA_NUMBER} εν Ανατολή {STOAA_ANATOLI}.", BOD))
+
+    # Κλείσιμο & υπογραφή
+    story.append(Spacer(1, .8 * cm))
+    story.append(Paragraph(f"Εν Αν∴ {STOAA_ANATOLI} {data['ημ_εγγράφου_full']}", CC))
+    story.append(Paragraph("Κατ' εντολήν", CC))
+    story.append(Paragraph("Ο Γραμματεύς", CC))
+    story.append(Spacer(1, 2 * cm))
+    if data.get("γραμματεύς"):
+        story.append(Paragraph(f"<u>{data['γραμματεύς']}</u>", CC))
+
+    buf = io.BytesIO()
+    SimpleDocTemplate(buf, pagesize=A4, rightMargin=2.5 * cm, leftMargin=2.5 * cm,
+                      topMargin=2 * cm, bottomMargin=2 * cm).build(story)
+    buf.seek(0)
+    return buf
+
+
+def render_veveosi_episkepti_ui() -> None:
+    """Custom καρτέλα συμπλήρωσης για τη Βεβαίωση Παρακολούθησης Επισκέπτη."""
+    st.markdown("### ✍️ Συμπλήρωση Βεβαίωσης Παρακολούθησης Επισκέπτη")
+    st.caption(
+        "Σημείωμα προς τη Στοά προελεύσεως του επισκέπτη, που βεβαιώνει την "
+        "παρουσία του στις Συνεδρίες μας. Παράγεται έτοιμο PDF για εκτύπωση & υπογραφή."
+    )
+
+    members_dict = load_members_dict()
+    gramm_options = {0: "— Πληκτρολόγηση χειροκίνητα —"}
+    for mid, m in members_dict.items():
+        gramm_options[mid] = f"{m.get('επώνυμο','')} {m.get('όνομα','')}".strip()
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("#### 👤 Στοιχεία Επισκέπτη")
+        episkeptis = st.text_input(
+            "Ονοματεπώνυμο επισκέπτη",
+            placeholder="π.χ. Σχίζας Β. Κωνσταντίνος", key="ve_name")
+        vathmos = st.selectbox(
+            "Τεκτονικός Βαθμός", ["Μαθ∴", "Ετ∴", "Διδ∴", "Αδ∴"],
+            index=1, key="ve_vathmos",
+            help="Εμφανίζεται ως «ο {βαθμός} μέλος σας …»")
+    with col2:
+        st.markdown("#### 🏛️ Στοά Προελεύσεως (Παραλήπτρια)")
+        stoa_pros = st.text_input(
+            "Όνομα Στοάς", placeholder="π.χ. ΑΔΕΛΦΟΠΟΙΗΣΙΣ", key="ve_stoa")
+        cA, cB = st.columns(2)
+        with cA:
+            ar_pros = st.text_input("υπ' αρ.", placeholder="π.χ. 65", key="ve_ar")
+        with cB:
+            anat_pros = st.text_input("εν Ανατολή", value="Αθηνών", key="ve_anat")
+
+    st.markdown("#### 📅 Ημερομηνίες Παρουσίας ως Επισκέπτης")
+    n_dates = st.number_input("Πλήθος Συνεδριών", 1, 12, 1, key="ve_ndates")
+    visit_dates: List[date] = []
+    dcols = st.columns(3)
+    for i in range(int(n_dates)):
+        with dcols[i % 3]:
+            vd = st.date_input(f"Συνεδρία {i+1}", value=date.today(), key=f"ve_d{i}")
+            visit_dates.append(vd)
+
+    st.markdown("#### 📋 Στοιχεία Εγγράφου")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        ar_prot = st.text_input("Αρ. Πρωτοκόλλου", placeholder="π.χ. 884", key="ve_prot")
+    with c2:
+        doc_date = st.date_input("Ημερομηνία Εγγράφου", value=date.today(), key="ve_docdate")
+    with c3:
+        gsel = st.selectbox("Γραμματεύς (από Μητρώο)", list(gramm_options.keys()),
+                            format_func=lambda x: gramm_options[x], key="ve_gsel")
+    gramm_prefill = ""
+    if gsel:
+        gm = members_dict.get(gsel) or {}
+        gramm_prefill = f"{gm.get('επώνυμο','')} {gm.get('όνομα','')}".strip()
+    gramm_name = st.text_input(
+        "Όνομα Γραμματέως (όπως θα εμφανιστεί στην υπογραφή)",
+        value=gramm_prefill, key="ve_gname")
+
+    ready = bool(episkeptis and stoa_pros and ar_pros and gramm_name)
+    if not ready:
+        st.warning("⚠️ Συμπληρώστε: επισκέπτη, Στοά προελεύσεως, αριθμό Στοάς και Γραμματέα.")
+
+    if st.button("📄 Δημιουργία & Λήψη PDF", type="primary",
+                 use_container_width=True, disabled=not ready, key="ve_gen"):
+        data = {
+            "αρ_πρωτ":          ar_prot,
+            "στοά_προς":        stoa_pros,
+            "αρ_προς":          ar_pros,
+            "ανατολή_προς":     anat_pros or "Αθηνών",
+            "βαθμός":           vathmos,
+            "επισκέπτης":       episkeptis,
+            "ημερομηνίες_str":  _dates_to_text(visit_dates),
+            "ημ_εγγράφου_full": f"{doc_date.day:02d} {MONTHS_GEN[doc_date.month]} {doc_date.year}",
+            "γραμματεύς":       gramm_name,
+        }
+        with st.spinner("Δημιουργία PDF…"):
+            pdf_buf = generate_veveosi_pdf(data)
+        st.success("✅ Η βεβαίωση δημιουργήθηκε!")
+        st.download_button(
+            "⬇️ Λήψη PDF — Βεβαίωση Παρακολούθησης Επισκέπτη",
+            data=pdf_buf,
+            file_name=f"σημείωμα_επισκέπτη_{doc_date}.pdf",
+            mime="application/pdf",
+            use_container_width=True, key="ve_dl",
+        )
+
+    with st.expander("📬 Οδηγίες"):
+        st.markdown(
+            "- Το Σημείωμα **απευθύνεται στη Στοά προελεύσεως** του επισκέπτη.\n"
+            "- Εκτυπώστε το, υπογράφεται από τον **Γραμματέα** «Κατ' εντολήν» "
+            "και φέρει τη **σφραγίδα** της Στοάς.\n"
+            "- Το λογότυπο/σφραγίδα προστίθεται κατά την εκτύπωση (δεν ενσωματώνεται στο PDF)."
+        )
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1247,6 +1470,11 @@ with tab_steps:
 
     st.markdown("---")
     st.markdown("#### 📎 Απαιτούμενα Έντυπα")
+    if not proc["forms"]:
+        st.caption(
+            "Δεν χρησιμοποιούνται έτοιμα πρότυπα — το έγγραφο παράγεται "
+            "απευθείας στην καρτέλα «✍️ Συμπλήρωση & Λήψη»."
+        )
     for f in proc["forms"]:
         path   = os.path.join(FORMS_ROOT, f["file"])
         exists = os.path.exists(path)
@@ -1260,6 +1488,13 @@ with tab_steps:
 with tab_forms:
     st.markdown(f"### Έντυπα: {selected}")
     st.caption("Κατεβάστε τα κενά πρότυπα ή δείτε το περιεχόμενό τους.")
+
+    if not proc["forms"]:
+        st.info(
+            "ℹ️ Αυτή η διαδικασία δεν χρησιμοποιεί πρότυπα έντυπα (.docx). "
+            "Το έγγραφο δημιουργείται έτοιμο σε PDF στην καρτέλα "
+            "**«✍️ Συμπλήρωση & Λήψη»**."
+        )
 
     all_blank = []
     for f in proc["forms"]:
@@ -1300,6 +1535,11 @@ with tab_forms:
 # TAB 3 — ΣΥΜΠΛΗΡΩΣΗ
 # ══════════════════════════════════════════════════════════════
 with tab_fill:
+    # Ειδική διαδικασία με δικό της PDF (Βεβαίωση Παρακολούθησης Επισκέπτη)
+    if proc.get("code") == "veveosi_episkepti":
+        render_veveosi_episkepti_ui()
+        st.stop()
+
     st.markdown(f"### ✍️ Συμπλήρωση Εντύπων: {selected}")
     st.caption(
         "Εισάγετε τα στοιχεία παρακάτω. Το σύστημα θα προσυμπληρώσει από "
