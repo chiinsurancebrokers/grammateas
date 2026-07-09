@@ -934,8 +934,163 @@ def render_veveosi_episkepti_ui() -> None:
 
 
 # ══════════════════════════════════════════════════════════════
-# ΒΕΒΑΙΩΣΗ ΤΑΜΕΙΑΚΗΣ ΕΝΗΜΕΡΟΤΗΤΑΣ
+# ΒΕΒΑΙΩΣΗ ΤΑΜΕΙΑΚΗΣ ΕΝΗΜΕΡΟΤΗΤΑΣ — PDF generator (inline)
 # ══════════════════════════════════════════════════════════════
+def _generate_tameiaki_pdf_inline(
+    ονομα_αδελφου: str,
+    ημερομηνια: str,
+    σεβασμιος: str = "",
+    γραμματεας: str = "",
+) -> io.BytesIO:
+    """Παράγει PDF Βεβαίωσης Ταμειακής Ενημερότητας χωρίς εξωτερική εξάρτηση."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import cm
+    from reportlab.lib import colors
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    )
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    NAVY = colors.HexColor("#1a2a4a")
+    GOLD = colors.HexColor("#b8960c")
+
+    # Γραμματοσειρές DejaVu (ίδιο path με το pdf_gen.py)
+    _base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _fonts_dir = os.path.join(_base, "fonts")
+    _system_dir = "/usr/share/fonts/truetype/dejavu"
+
+    def _fp(name):
+        lp = os.path.join(_fonts_dir, name)
+        if os.path.exists(lp):
+            return lp
+        sp = os.path.join(_system_dir, name)
+        if os.path.exists(sp):
+            return sp
+        raise FileNotFoundError(f"Font not found: {name}")
+
+    registered = pdfmetrics.getRegisteredFontNames()
+    for alias, fn in [
+        ("DSR",  "DejaVuSerif.ttf"),
+        ("DSB",  "DejaVuSerif-Bold.ttf"),
+        ("DSI",  "DejaVuSerif-Italic.ttf"),
+        ("DSS",  "DejaVuSans.ttf"),
+        ("DSSB", "DejaVuSans-Bold.ttf"),
+    ]:
+        if alias not in registered:
+            try:
+                pdfmetrics.registerFont(TTFont(alias, _fp(fn)))
+            except Exception:
+                pass
+
+    def S(**kw):
+        d = dict(fontName="DSR", fontSize=10, spaceAfter=5, leading=15,
+                 textColor=colors.black)
+        d.update(kw)
+        return ParagraphStyle(str(hash(str(sorted(kw.items())))), **d)
+
+    story = []
+
+    # ── Κεφαλίδα ──────────────────────────────────────────────
+    hdr = S(fontName="DSSB", fontSize=10, alignment=TA_CENTER, spaceAfter=3,
+            textColor=NAVY)
+    cc  = S(fontName="DSS",  fontSize=10, alignment=TA_CENTER, spaceAfter=3,
+            textColor=NAVY)
+    story += [
+        Paragraph("Ε∴Δ∴Τ∴Μ∴Α∴Τ∴Σ∴", hdr),
+        Paragraph("Εν Ονόματι και Υπό την Αιγίδα", cc),
+        Paragraph("της Μεγάλης Στοάς της Ελλάδος", cc),
+        Paragraph("των Αρχαίων Ελευθέρων και Αποδεδεγμένων Τεκτόνων", cc),
+        Spacer(1, .2*cm),
+        Paragraph("<b>Σ∴ Στ∴ ΑΚΡΟΠΟΛΙΣ υπ' αρ. 84     εν Αν∴ Αθ∴</b>", hdr),
+        Spacer(1, .2*cm),
+        HRFlowable(width="100%", thickness=1.5, color=NAVY, spaceAfter=8),
+    ]
+
+    # ── Τίτλος ────────────────────────────────────────────────
+    story.append(Spacer(1, .3*cm))
+    story.append(Paragraph(
+        "ΒΕΒΑΙΩΣΗ ΤΑΜΕΙΑΚΗΣ ΕΝΗΜΕΡΟΤΗΤΑΣ",
+        S(fontName="DSB", fontSize=13, alignment=TA_CENTER,
+          spaceAfter=8, spaceBefore=8, textColor=NAVY),
+    ))
+    story.append(HRFlowable(width="60%", thickness=2, color=GOLD,
+                            hAlign="CENTER", spaceBefore=2, spaceAfter=12))
+
+    # ── Σώμα ──────────────────────────────────────────────────
+    body = S(fontName="DSR", fontSize=10.5, alignment=TA_JUSTIFY,
+             spaceAfter=10, leading=18)
+    ital = S(fontName="DSI", fontSize=10,   alignment=TA_JUSTIFY,
+             spaceAfter=8,  leading=17)
+
+    story.append(Paragraph(
+        f"Βεβαιώνεται ότι ο Αδελφός <b>{ονομα_αδελφου}</b>, μέλος της Σεπτής Στοάς "
+        f"«Ακρόπολις» υπ' αριθ. 84, είναι <b>ταμειακώς ενήμερος</b> και δεν έχει "
+        f"καμία ληξιπρόθεσμη οικονομική υποχρέωση προς τη Στοά μας μέχρι και την "
+        f"ημερομηνία έκδοσης της παρούσας.",
+        body,
+    ))
+    story.append(Spacer(1, .2*cm))
+    story.append(Paragraph(
+        "Η παρούσα εκδίδεται κατόπιν αιτήσεώς του, προκειμένου να χρησιμοποιηθεί "
+        "για κάθε νόμιμη τεκτονική χρήση.",
+        ital,
+    ))
+
+    # ── Ημερομηνία ────────────────────────────────────────────
+    story.append(Spacer(1, .6*cm))
+    story.append(Paragraph(
+        f"Αθήνα,  {ημερομηνια}",
+        S(fontName="DSR", fontSize=10, alignment=TA_LEFT,
+          spaceAfter=6, spaceBefore=16),
+    ))
+
+    # ── Υπογραφές ─────────────────────────────────────────────
+    story.append(Spacer(1, 1.0*cm))
+    sig_lbl = S(fontName="DSB", fontSize=10, alignment=TA_CENTER,
+                spaceAfter=2, spaceBefore=4)
+    sig_nm  = S(fontName="DSI", fontSize=10, alignment=TA_CENTER, spaceAfter=2)
+    sig_sub = S(fontName="DSR", fontSize=9,  alignment=TA_CENTER,
+                textColor=colors.grey, spaceAfter=2)
+
+    col_w = (A4[0] - 5.0*cm) / 2
+
+    def _cell(τίτλος, όνομα, σημείωση):
+        return [
+            Paragraph(f"<b>{τίτλος}</b>", sig_lbl),
+            Spacer(1, .5*cm),
+            Paragraph("...................................................", sig_sub),
+            Paragraph(όνομα if όνομα else "", sig_nm),
+            Paragraph(σημείωση, sig_sub),
+        ]
+
+    sig_table = Table(
+        [[
+            _cell("Ο Σεβάσμιος Διδάσκαλος", σεβασμιος, "(Υπογραφή – Σφραγίδα)"),
+            _cell("Ο Γραμματέας", γραμματεας, "(Υπογραφή)"),
+        ]],
+        colWidths=[col_w, col_w],
+    )
+    sig_table.setStyle(TableStyle([
+        ("VALIGN",       (0, 0), (-1, -1), "TOP"),
+        ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+    ]))
+    story.append(sig_table)
+
+    buf = io.BytesIO()
+    SimpleDocTemplate(
+        buf, pagesize=A4,
+        rightMargin=2.5*cm, leftMargin=2.5*cm,
+        topMargin=2*cm,     bottomMargin=2.5*cm,
+    ).build(story)
+    buf.seek(0)
+    return buf
+
+
 def render_tameiaki_enimerotita_ui() -> None:
     """Custom καρτέλα για τη Βεβαίωση Ταμειακής Ενημερότητας."""
     st.markdown("### ✍️ Βεβαίωση Ταμειακής Ενημερότητας")
@@ -1053,9 +1208,8 @@ def render_tameiaki_enimerotita_ui() -> None:
         disabled=not ready,
         key="te_gen",
     ):
-        from modules.pdf_gen import generate_tameiaki_enimerotita_pdf
         with st.spinner("Δημιουργία PDF…"):
-            pdf_buf = generate_tameiaki_enimerotita_pdf(
+            pdf_buf = _generate_tameiaki_pdf_inline(
                 ονομα_αδελφου=ονομα_αδελφου.strip(),
                 ημερομηνια=ημ_εκδοσης.strftime("%d / %m / %Y"),
                 σεβασμιος=σεβασμιος.strip(),
