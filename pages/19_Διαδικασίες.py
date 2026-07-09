@@ -14,6 +14,8 @@
   4. Αναγγελία Μεταβολών
   5. Έγκριση Κοινής Συνεδρίας
   6. Έγκριση Λευκής Εορτής / Ανοικτής Εκδήλωσης
+  7. Βεβαίωση Παρακολούθησης Επισκέπτη
+  8. Βεβαίωση Ταμειακής Ενημερότητας
 """
 
 import sys
@@ -533,6 +535,31 @@ DIKADIKASIEES: Dict[str, Dict] = {
         "input_groups": [],
         "claude_hint": "",
     },
+
+    "💰 Βεβαίωση Ταμειακής Ενημερότητας": {
+        "code": "tameiaki_enimerotita",
+        "custom_pdf": True,
+        "subtitle": "Σεπτή Στοά «Ακρόπολις» υπ' αριθ. 84",
+        "description": (
+            "Έκδοση Βεβαίωσης Ταμειακής Ενημερότητας για μέλος της Στοάς. "
+            "Βεβαιώνει ότι ο Αδελφός είναι ταμειακώς ενήμερος και δεν έχει "
+            "ληξιπρόθεσμες οικονομικές υποχρεώσεις. Παράγεται απευθείας σε PDF, "
+            "έτοιμο για εκτύπωση, υπογραφή και σφράγιση."
+        ),
+        "deadline_note": (
+            "📝 Υπογράφεται από τον Σεβάσμιο Διδάσκαλο (με σφραγίδα) και τον Γραμματέα."
+        ),
+        "steps": [
+            ("1", "Επιλογή μέλους από το Μητρώο", []),
+            ("2", "Έλεγχος ταμειακής κατάστασης (Βιβλίο Ταμείου)", []),
+            ("3", "Έκδοση & εκτύπωση της Βεβαίωσης (PDF)", []),
+            ("4", "Υπογραφή από Σεβάσμιο (με σφραγίδα) & Γραμματέα", []),
+            ("5", "Παράδοση στον ενδιαφερόμενο Αδελφό", []),
+        ],
+        "forms": [],
+        "input_groups": [],
+        "claude_hint": "",
+    },
 }
 
 
@@ -903,6 +930,158 @@ def render_veveosi_episkepti_ui() -> None:
             "- Εκτυπώστε το, υπογράφεται από τον **Γραμματέα** «Κατ' εντολήν» "
             "και φέρει τη **σφραγίδα** της Στοάς.\n"
             "- Το λογότυπο/σφραγίδα προστίθεται κατά την εκτύπωση (δεν ενσωματώνεται στο PDF)."
+        )
+
+
+# ══════════════════════════════════════════════════════════════
+# ΒΕΒΑΙΩΣΗ ΤΑΜΕΙΑΚΗΣ ΕΝΗΜΕΡΟΤΗΤΑΣ
+# ══════════════════════════════════════════════════════════════
+def render_tameiaki_enimerotita_ui() -> None:
+    """Custom καρτέλα για τη Βεβαίωση Ταμειακής Ενημερότητας."""
+    st.markdown("### ✍️ Βεβαίωση Ταμειακής Ενημερότητας")
+    st.caption(
+        "Βεβαιώνει ότι ο Αδελφός είναι ταμειακώς ενήμερος. "
+        "Παράγεται έτοιμο PDF για εκτύπωση, υπογραφή και σφράγιση."
+    )
+
+    members_dict = load_members_dict()
+
+    # Βοηθητικές επιλογές για dropdown
+    member_options = {0: "— Επιλογή μέλους —"}
+    for mid, m in members_dict.items():
+        βαθμός = m.get("τεκτονικός_βαθμός", "")
+        member_options[mid] = (
+            f"{m.get('επώνυμο','')} {m.get('όνομα','')} "
+            f"({βαθμός})"
+        ).strip()
+
+    staff_options = {0: "— Πληκτρολόγηση χειροκίνητα —"}
+    for mid, m in members_dict.items():
+        staff_options[mid] = f"{m.get('επώνυμο','')} {m.get('όνομα','')}".strip()
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("#### 👤 Αδελφός")
+        sel_member = st.selectbox(
+            "Επιλογή μέλους",
+            list(member_options.keys()),
+            format_func=lambda x: member_options[x],
+            key="te_member",
+        )
+        # Αν δεν βρεθεί από το μητρώο, επιτρέπουμε χειροκίνητη συμπλήρωση
+        member_data = members_dict.get(sel_member) if sel_member else None
+        if member_data:
+            full_name = (
+                f"{member_data.get('επώνυμο','')} "
+                f"{member_data.get('όνομα','')}"
+            ).strip()
+            if member_data.get("πατρώνυμο"):
+                full_name += f" του {member_data['πατρώνυμο']}"
+        else:
+            full_name = ""
+        ονομα_αδελφου = st.text_input(
+            "Ονοματεπώνυμο (επεξεργάσιμο)",
+            value=full_name,
+            key="te_name",
+            placeholder="π.χ. Παπαδόπουλος Γεώργιος του Νικολάου",
+        )
+
+    with col2:
+        st.markdown("#### 📅 Στοιχεία Εγγράφου")
+        ημ_εκδοσης = st.date_input(
+            "Ημερομηνία Έκδοσης",
+            value=date.today(),
+            key="te_date",
+        )
+
+    st.markdown("#### ✍️ Υπογράφοντες")
+    c1, c2 = st.columns(2)
+
+    with c1:
+        sev_sel = st.selectbox(
+            "Σεβάσμιος Διδάσκαλος (από Μητρώο)",
+            list(staff_options.keys()),
+            format_func=lambda x: staff_options[x],
+            key="te_sev_sel",
+        )
+        sev_prefill = ""
+        if sev_sel:
+            sm = members_dict.get(sev_sel) or {}
+            sev_prefill = f"{sm.get('επώνυμο','')} {sm.get('όνομα','')}".strip()
+        σεβασμιος = st.text_input(
+            "Ονοματεπώνυμο Σεβασμίου",
+            value=sev_prefill,
+            key="te_sev_name",
+            placeholder="(προαιρετικό)",
+        )
+
+    with c2:
+        gramm_sel = st.selectbox(
+            "Γραμματέας (από Μητρώο)",
+            list(staff_options.keys()),
+            format_func=lambda x: staff_options[x],
+            key="te_gramm_sel",
+        )
+        gramm_prefill = ""
+        if gramm_sel:
+            gm = members_dict.get(gramm_sel) or {}
+            gramm_prefill = f"{gm.get('επώνυμο','')} {gm.get('όνομα','')}".strip()
+        γραμματεας = st.text_input(
+            "Ονοματεπώνυμο Γραμματέα",
+            value=gramm_prefill,
+            key="te_gramm_name",
+            placeholder="(προαιρετικό)",
+        )
+
+    st.divider()
+
+    if ονομα_αδελφου:
+        st.info(
+            f"📋 Βεβαίωση για: **{ονομα_αδελφου}**  |  "
+            f"Ημερομηνία: **{ημ_εκδοσης.strftime('%d/%m/%Y')}**"
+        )
+    else:
+        st.warning("⚠️ Επιλέξτε μέλος ή πληκτρολογήστε ονοματεπώνυμο.")
+
+    ready = bool(ονομα_αδελφου.strip())
+
+    if st.button(
+        "📄 Δημιουργία & Λήψη PDF",
+        type="primary",
+        use_container_width=True,
+        disabled=not ready,
+        key="te_gen",
+    ):
+        from modules.pdf_gen import generate_tameiaki_enimerotita_pdf
+        with st.spinner("Δημιουργία PDF…"):
+            pdf_buf = generate_tameiaki_enimerotita_pdf(
+                ονομα_αδελφου=ονομα_αδελφου.strip(),
+                ημερομηνια=ημ_εκδοσης.strftime("%d / %m / %Y"),
+                σεβασμιος=σεβασμιος.strip(),
+                γραμματεας=γραμματεας.strip(),
+            )
+        safe_name = ονομα_αδελφου.replace(" ", "_")
+        filename  = (
+            f"Ταμειακή_Ενημερότητα_{safe_name}_"
+            f"{ημ_εκδοσης.strftime('%Y%m%d')}.pdf"
+        )
+        st.success("✅ Η βεβαίωση δημιουργήθηκε επιτυχώς!")
+        st.download_button(
+            "⬇️ Λήψη PDF — Βεβαίωση Ταμειακής Ενημερότητας",
+            data=pdf_buf.getvalue(),
+            file_name=filename,
+            mime="application/pdf",
+            use_container_width=True,
+            key="te_dl",
+        )
+
+    with st.expander("📬 Οδηγίες"):
+        st.markdown(
+            "- Η Βεβαίωση **υπογράφεται από τον Σεβάσμιο** (με σφραγίδα) "
+            "και τον **Γραμματέα**.\n"
+            "- Εκδίδεται κατόπιν αιτήσεως του μέλους για κάθε νόμιμη τεκτονική χρήση.\n"
+            "- Η σφραγίδα της Στοάς προστίθεται κατά την εκτύπωση."
         )
 
 
@@ -1538,6 +1717,11 @@ with tab_fill:
     # Ειδική διαδικασία με δικό της PDF (Βεβαίωση Παρακολούθησης Επισκέπτη)
     if proc.get("code") == "veveosi_episkepti":
         render_veveosi_episkepti_ui()
+        st.stop()
+
+    # Ειδική διαδικασία με δικό της PDF (Βεβαίωση Ταμειακής Ενημερότητας)
+    if proc.get("code") == "tameiaki_enimerotita":
+        render_tameiaki_enimerotita_ui()
         st.stop()
 
     st.markdown(f"### ✍️ Συμπλήρωση Εντύπων: {selected}")
