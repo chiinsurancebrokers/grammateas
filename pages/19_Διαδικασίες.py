@@ -1067,9 +1067,12 @@ def _generate_tameiaki_pdf_inline(
     sig_sub = S(fontName="DSR", fontSize=9,  alignment=TA_CENTER,
                 textColor=colors.grey, spaceAfter=2)
 
-    col_w = (A4[0] - 5.0*cm) / 2
+    # Εύρη στηλών: αριστερά | σφραγίδα | δεξιά
+    page_w   = A4[0] - 5.0*cm   # διαθέσιμο πλάτος
+    seal_w   = 3.0*cm
+    side_w   = (page_w - seal_w) / 2
 
-    def _cell(τίτλος, όνομα, σημείωση):
+    def _sig_cell(τίτλος, όνομα, σημείωση):
         return [
             Paragraph(f"<b>{τίτλος}</b>", sig_lbl),
             Spacer(1, .5*cm),
@@ -1078,18 +1081,38 @@ def _generate_tameiaki_pdf_inline(
             Paragraph(σημείωση, sig_sub),
         ]
 
+    # Σφραγίδα (κέντρο)
+    from reportlab.platypus import Image as RLImage
+    _seal_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "assets", "akropolis-seal-hq.png",
+    )
+    # Fallback στο παλιό αρχείο αν δεν υπάρχει το νέο
+    if not os.path.exists(_seal_path):
+        _seal_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "assets", "akropolis-seal.png",
+        )
+
+    if os.path.exists(_seal_path):
+        seal_cell = [RLImage(_seal_path, width=2.5*cm, height=2.5*cm)]
+    else:
+        seal_cell = [Paragraph("(Σφραγίδα)", sig_sub)]
+
     sig_table = Table(
         [[
-            _cell("Ο Σεβάσμιος Διδάσκαλος", σεβασμιος, "(Υπογραφή – Σφραγίδα)"),
-            _cell("Ο Γραμματέας", γραμματεας, "(Υπογραφή)"),
+            _sig_cell("Ο Σεβάσμιος Διδάσκαλος", σεβασμιος, "(Υπογραφή – Σφραγίδα)"),
+            seal_cell,
+            _sig_cell("Ο Γραμματέας", γραμματεας, "(Υπογραφή)"),
         ]],
-        colWidths=[col_w, col_w],
+        colWidths=[side_w, seal_w, side_w],
     )
     sig_table.setStyle(TableStyle([
-        ("VALIGN",       (0, 0), (-1, -1), "TOP"),
+        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
         ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 10),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        # Χωρίς καμία γραμμή
     ]))
     story.append(sig_table)
 
