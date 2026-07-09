@@ -939,6 +939,8 @@ def render_veveosi_episkepti_ui() -> None:
 def _generate_tameiaki_pdf_inline(
     ονομα_αδελφου: str,
     ημερομηνια: str,
+    αρ_μητρωου: str = "",
+    αρ_πρωτοκολλου: str = "",
     σεβασμιος: str = "",
     γραμματεας: str = "",
 ) -> io.BytesIO:
@@ -1009,6 +1011,14 @@ def _generate_tameiaki_pdf_inline(
         HRFlowable(width="100%", thickness=1.5, color=NAVY, spaceAfter=8),
     ]
 
+    # Αρ. Πρωτοκόλλου (δεξιά, αν υπάρχει)
+    if αρ_πρωτοκολλου:
+        story.append(Paragraph(
+            f"Αρ. Πρωτ.: <b>{αρ_πρωτοκολλου}</b>",
+            S(fontName="DSR", fontSize=10, alignment=TA_LEFT,
+              spaceAfter=4, textColor=colors.black),
+        ))
+
     # ── Τίτλος ────────────────────────────────────────────────
     story.append(Spacer(1, .3*cm))
     story.append(Paragraph(
@@ -1026,7 +1036,9 @@ def _generate_tameiaki_pdf_inline(
              spaceAfter=8,  leading=17)
 
     story.append(Paragraph(
-        f"Βεβαιώνεται ότι ο Αδελφός <b>{ονομα_αδελφου}</b>, μέλος της Σεπτής Στοάς "
+        f"Βεβαιώνεται ότι ο Αδελφός <b>{ονομα_αδελφου}</b>"
+        + (f", Αρ. Μητρώου <b>{αρ_μητρωου}</b>," if αρ_μητρωου else ",")
+        + " μέλος της Σεπτής Στοάς "
         f"«Ακρόπολις» υπ' αριθ. 84, είναι <b>ταμειακώς ενήμερος</b> και δεν έχει "
         f"καμία ληξιπρόθεσμη οικονομική υποχρέωση προς τη Στοά μας μέχρι και την "
         f"ημερομηνία έκδοσης της παρούσας.",
@@ -1133,13 +1145,21 @@ def render_tameiaki_enimerotita_ui() -> None:
             ).strip()
             if member_data.get("πατρώνυμο"):
                 full_name += f" του {member_data['πατρώνυμο']}"
+            arith_prefill = str(member_data.get("αρ_μητρώου_στοάς", "") or "")
         else:
             full_name = ""
+            arith_prefill = ""
         ονομα_αδελφου = st.text_input(
             "Ονοματεπώνυμο (επεξεργάσιμο)",
             value=full_name,
             key="te_name",
             placeholder="π.χ. Παπαδόπουλος Γεώργιος του Νικολάου",
+        )
+        αρ_μητρωου = st.text_input(
+            "Αριθμός Μητρώου Στοάς",
+            value=arith_prefill,
+            key="te_arith",
+            placeholder="π.χ. 42  (χειροκίνητα αν δεν υπάρχει στο Μητρώο)",
         )
 
     with col2:
@@ -1148,6 +1168,11 @@ def render_tameiaki_enimerotita_ui() -> None:
             "Ημερομηνία Έκδοσης",
             value=date.today(),
             key="te_date",
+        )
+        αρ_πρωτοκολλου = st.text_input(
+            "Αριθμός Πρωτοκόλλου",
+            key="te_proto",
+            placeholder="π.χ. 884  (προαιρετικό)",
         )
 
     st.markdown("#### ✍️ Υπογράφοντες")
@@ -1192,8 +1217,10 @@ def render_tameiaki_enimerotita_ui() -> None:
     st.divider()
 
     if ονομα_αδελφου:
+        arith_str = f"  |  Αρ. Μητρώου: **{αρ_μητρωου}**" if αρ_μητρωου.strip() else ""
+        proto_str = f"  |  Αρ. Πρωτ.: **{αρ_πρωτοκολλου}**" if αρ_πρωτοκολλου.strip() else ""
         st.info(
-            f"📋 Βεβαίωση για: **{ονομα_αδελφου}**  |  "
+            f"📋 Βεβαίωση για: **{ονομα_αδελφου}**{arith_str}{proto_str}  |  "
             f"Ημερομηνία: **{ημ_εκδοσης.strftime('%d/%m/%Y')}**"
         )
     else:
@@ -1211,6 +1238,8 @@ def render_tameiaki_enimerotita_ui() -> None:
         with st.spinner("Δημιουργία PDF…"):
             pdf_buf = _generate_tameiaki_pdf_inline(
                 ονομα_αδελφου=ονομα_αδελφου.strip(),
+                αρ_μητρωου=αρ_μητρωου.strip(),
+                αρ_πρωτοκολλου=αρ_πρωτοκολλου.strip(),
                 ημερομηνια=ημ_εκδοσης.strftime("%d / %m / %Y"),
                 σεβασμιος=σεβασμιος.strip(),
                 γραμματεας=γραμματεας.strip(),
