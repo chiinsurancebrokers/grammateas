@@ -1035,9 +1035,16 @@ def _generate_tameiaki_pdf_inline(
     ital = S(fontName="DSI", fontSize=10,   alignment=TA_JUSTIFY,
              spaceAfter=8,  leading=17)
 
+    # Αρ. Μητρώου: αν κενό → κενό για χειρόγραφη συμπλήρωση
+    αρ_μητρ_str = (
+        f", Αρ. Μητρώου Μεγάλης Στοάς: <b>{αρ_μητρωου}</b>,"
+        if αρ_μητρωου
+        else ", Αρ. Μητρώου Μεγάλης Στοάς: ..................,"
+    )
+
     story.append(Paragraph(
         f"Βεβαιώνεται ότι ο Αδελφός <b>{ονομα_αδελφου}</b>"
-        + (f", Αρ. Μητρώου <b>{αρ_μητρωου}</b>," if αρ_μητρωου else ",")
+        + αρ_μητρ_str
         + " μέλος της Σεπτής Στοάς "
         f"«Ακρόπολις» υπ' αριθ. 84, είναι <b>ταμειακώς ενήμερος</b> και δεν έχει "
         f"καμία ληξιπρόθεσμη οικονομική υποχρέωση προς τη Στοά μας μέχρι και την "
@@ -1059,62 +1066,115 @@ def _generate_tameiaki_pdf_inline(
           spaceAfter=6, spaceBefore=16),
     ))
 
-    # ── Υπογραφές ─────────────────────────────────────────────
-    story.append(Spacer(1, 1.0*cm))
-    sig_lbl = S(fontName="DSB", fontSize=10, alignment=TA_CENTER,
-                spaceAfter=2, spaceBefore=4)
-    sig_nm  = S(fontName="DSI", fontSize=10, alignment=TA_CENTER, spaceAfter=2)
-    sig_sub = S(fontName="DSR", fontSize=9,  alignment=TA_CENTER,
-                textColor=colors.grey, spaceAfter=2)
-
-    # Εύρη στηλών: αριστερά | σφραγίδα | δεξιά
-    page_w   = A4[0] - 5.0*cm   # διαθέσιμο πλάτος
-    seal_w   = 3.0*cm
-    side_w   = (page_w - seal_w) / 2
-
-    def _sig_cell(τίτλος, όνομα, σημείωση):
-        return [
-            Paragraph(f"<b>{τίτλος}</b>", sig_lbl),
-            Spacer(1, .5*cm),
-            Paragraph("...................................................", sig_sub),
-            Paragraph(όνομα if όνομα else "", sig_nm),
-            Paragraph(σημείωση, sig_sub),
-        ]
-
-    # Σφραγίδα (κέντρο)
+    # ── Υπογραφές με canvas (χωρίς Table = χωρίς γραμμές) ────
     from reportlab.platypus import Image as RLImage
+    from reportlab.platypus.flowables import Flowable
+
     _seal_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "assets", "akropolis-seal-hq.png",
     )
-    # Fallback στο παλιό αρχείο αν δεν υπάρχει το νέο
     if not os.path.exists(_seal_path):
         _seal_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             "assets", "akropolis-seal.png",
         )
+    _has_seal = os.path.exists(_seal_path)
+    _seal_src = _seal_path if _has_seal else None
 
-    if os.path.exists(_seal_path):
-        seal_cell = [RLImage(_seal_path, width=2.5*cm, height=2.5*cm)]
-    else:
-        seal_cell = [Paragraph("(Σφραγίδα)", sig_sub)]
+    class SignatureBlock(Flowable):
+        """Τρεις στήλες (αριστερά | σφραγίδα | δεξιά) χωρίς καμία γραμμή."""
+        def __init__(self, left_title, left_name, left_sub,
+                     right_title, right_name, right_sub,
+                     seal_path, width):
+            Flowable.__init__(self)
+            self.left_title = left_title
+            self.left_name  = left_name
+            self.left_sub   = left_sub
+            self.right_title= right_title
+            self.right_name = right_name
+            self.right_sub  = right_sub
+            self.seal_path  = seal_path
+            self.width      = width
+            self.height     = 4.0*cm
 
-    sig_table = Table(
-        [[
-            _sig_cell("Ο Σεβάσμιος Διδάσκαλος", σεβασμιος, "(Υπογραφή – Σφραγίδα)"),
-            seal_cell,
-            _sig_cell("Ο Γραμματέας", γραμματεας, "(Υπογραφή)"),
-        ]],
-        colWidths=[side_w, seal_w, side_w],
-    )
-    sig_table.setStyle(TableStyle([
-        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        # Χωρίς καμία γραμμή
-    ]))
-    story.append(sig_table)
+        def draw(self):
+            c = self.canv
+            w = self.width
+            seal_sz  = 3.0*cm          # μέγεθος σφραγίδας
+            col_w    = (w - seal_sz) / 2
+            y_top    = self.height      # 3.5cm
+
+            # ── Αριστερά: τίτλος ──────────────────────────────
+            c.setFillColorRGB(0, 0, 0)
+            c.setFont("DSB", 10)
+            c.drawCentredString(col_w / 2, y_top - 0.5*cm, self.left_title)
+
+            # dotted line υπογραφής
+            dot_y = y_top - 1.2*cm
+            c.setStrokeColorRGB(0.5, 0.5, 0.5)
+            c.setLineWidth(0.4)
+            c.setDash(1, 3)
+            c.line(col_w * 0.05, dot_y, col_w * 0.92, dot_y)
+            c.setDash(1, 0)            # reset — solid line
+            c.setLineWidth(1)
+
+            # όνομα & σημείωση
+            if self.left_name:
+                c.setFont("DSI", 10)
+                c.setFillColorRGB(0, 0, 0)
+                c.drawCentredString(col_w / 2, dot_y - 0.5*cm, self.left_name)
+            c.setFont("DSR", 8)
+            c.setFillColorRGB(0.4, 0.4, 0.4)
+            c.drawCentredString(col_w / 2, dot_y - 1.0*cm, self.left_sub)
+
+            # ── Σφραγίδα κέντρο ───────────────────────────────
+            seal_x = col_w
+            seal_y = y_top - seal_sz - 0.2*cm
+            if self.seal_path and os.path.exists(self.seal_path):
+                # Χρησιμοποιούμε ImageReader για καλύτερο έλεγχο
+                from reportlab.lib.utils import ImageReader
+                img_reader = ImageReader(self.seal_path)
+                c.drawImage(img_reader, seal_x, seal_y,
+                            width=seal_sz, height=seal_sz,
+                            preserveAspectRatio=True, anchor='c',
+                            mask='auto')
+
+            # ── Δεξιά: τίτλος ─────────────────────────────────
+            rx = col_w + seal_sz
+            c.setFillColorRGB(0, 0, 0)
+            c.setFont("DSB", 10)
+            c.drawCentredString(rx + col_w / 2, y_top - 0.5*cm, self.right_title)
+
+            # dotted line
+            c.setStrokeColorRGB(0.5, 0.5, 0.5)
+            c.setLineWidth(0.4)
+            c.setDash(1, 3)
+            c.line(rx + col_w * 0.08, dot_y, rx + col_w * 0.95, dot_y)
+            c.setDash(1, 0)
+            c.setLineWidth(1)
+
+            # όνομα & σημείωση
+            if self.right_name:
+                c.setFont("DSI", 10)
+                c.setFillColorRGB(0, 0, 0)
+                c.drawCentredString(rx + col_w / 2, dot_y - 0.5*cm, self.right_name)
+            c.setFont("DSR", 8)
+            c.setFillColorRGB(0.4, 0.4, 0.4)
+            c.drawCentredString(rx + col_w / 2, dot_y - 1.0*cm, self.right_sub)
+
+    page_content_w = A4[0] - 5.0*cm
+    story.append(Spacer(1, 1.0*cm))
+    story.append(SignatureBlock(
+        left_title  = "Ο Σεβάσμιος Διδάσκαλος",
+        left_name   = σεβασμιος,
+        left_sub    = "(Υπογραφή – Σφραγίδα)",
+        right_title = "Ο Γραμματέας",
+        right_name  = γραμματεας,
+        right_sub   = "(Υπογραφή)",
+        seal_path   = _seal_src,
+        width       = page_content_w,
+    ))
 
     buf = io.BytesIO()
     SimpleDocTemplate(
